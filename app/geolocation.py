@@ -13,8 +13,8 @@ using, in order:
 
 Input contract
 --------------
-`resolve_location` / `resolve_all` take plain dicts, intentionally decoupled
-from the Chunk 1 DB schema and Chunk 3 extraction schema:
+`resolve_location` / `resolve_all` accept reports with extracted_json directly,
+or the original flattened input shape:
 
     {
         "id": str,
@@ -25,9 +25,10 @@ from the Chunk 1 DB schema and Chunk 3 extraction schema:
         "timestamp": str | datetime | None,
     }
 
-See scripts/geolocation_smoke_test.py for how this is built from raw Chunk 2
-reports today, and the "Chunk 3 integration" notes in that script for what
-changes once real extraction is wired in.
+Use result.to_report(original_report) to add the resolved_lat, resolved_lon,
+and uncertainty_radius_m fields consumed by clustering. Exclude unresolved
+results before clustering. Inference is an approximate fallback, not a claim
+that the report's actual location has been established.
 """
 
 from __future__ import annotations
@@ -36,13 +37,16 @@ import json
 import logging
 import math
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from threading import Lock
 from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
@@ -56,7 +60,9 @@ ResolutionMethod = Literal["gps", "landmark_geocode", "nearby_inference", "unres
 GPS_UNCERTAINTY_M = 15.0
 GPS_CONFIDENCE = 0.97
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_URL = os.getenv(
+    "CDIS_NOMINATIM_URL", "https://nominatim.openstreetmap.org/search"
+)
 NOMINATIM_TIMEOUT_S = 4.0
 NOMINATIM_MIN_INTERVAL_S = 1.0  # Nominatim usage policy: max ~1 request/sec.
 # Set CDIS_OFFLINE_GEOCODE=1 to skip the network entirely (demo safety valve).
@@ -77,9 +83,9 @@ NEARBY_TIME_WINDOW = timedelta(minutes=20)
 NEARBY_MAX_CLUSTER_SPREAD_M = 120.0
 NEARBY_MIN_SAMPLES = 2
 
-GEOCODE_CACHE_PATH = (
-    Path(__file__).resolve().parents[1] / "data" / "geocode_cache.json"
-)
+GEOCODE_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "geocode_cache.json"
+# v1 cached unsuccessful lookups caused by requesting a format without place_rank.
+GEOCODE_CACHE_VERSION = 2
 
 # Curated from a live Nominatim lookup during development (see PR/commit notes),
 # not hand-guessed - covers the small set of *real* named places this scenario
@@ -127,6 +133,18 @@ class LocationResult:
             "detail": self.detail,
         }
 
+    def to_report(self, report: dict) -> dict:
+        """Return a copy with clustering fields and the original resolution detail."""
+        if report.get("id") != self.report_id:
+            raise ValueError("Location result and report IDs do not match")
+        return {
+            **report,
+            "resolved_lat": self.lat,
+            "resolved_lon": self.lng,
+            "uncertainty_radius_m": self.uncertainty_radius_meters,
+            "geolocation": self.to_dict(),
+        }
+
 
 def _unresolved(report_id: str, detail: str = "") -> LocationResult:
     return LocationResult(
@@ -154,7 +172,7 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         math.sin(dphi / 2) ** 2
         + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     )
-    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+    return 2 * r * math.asin(math.sqrt(max(0.0, min(1.0, a))))
 
 
 # ---------------------------------------------------------------------------
@@ -165,22 +183,50 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _load_cache() -> dict[str, dict | None]:
     try:
         with GEOCODE_CACHE_PATH.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+            payload = json.load(f)
+        if (
+            isinstance(payload, dict)
+            and payload.get("version") == GEOCODE_CACHE_VERSION
+        ):
+            entries = payload.get("entries")
+            if isinstance(entries, dict):
+                return entries
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError):
+        logger.warning("Could not read geocode cache at %s", GEOCODE_CACHE_PATH)
+    return {}
 
 
 def _save_cache(cache: dict[str, dict | None]) -> None:
+    temporary_path = None
     try:
         GEOCODE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with GEOCODE_CACHE_PATH.open("w", encoding="utf-8") as f:
-            json.dump(cache, f, indent=2, sort_keys=True)
+        with NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=GEOCODE_CACHE_PATH.parent, delete=False
+        ) as f:
+            temporary_path = Path(f.name)
+            json.dump(
+                {"version": GEOCODE_CACHE_VERSION, "entries": cache},
+                f,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+        temporary_path.replace(GEOCODE_CACHE_PATH)
     except OSError:
         logger.warning("Could not persist geocode cache to %s", GEOCODE_CACHE_PATH)
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove temporary geocode cache file")
 
 
 _CACHE: dict[str, dict | None] = _load_cache()
 _last_nominatim_call = 0.0
+_nominatim_lock = Lock()
 
 
 def _normalize_landmark(text: str) -> str:
@@ -209,6 +255,10 @@ def _radius_from_place_rank(rank: int) -> float | None:
 def _bbox_radius_m(bbox: list[str]) -> float:
     try:
         lat_min, lat_max, lon_min, lon_max = (float(x) for x in bbox)
+        if not (_valid_gps(lat_min, lon_min) and _valid_gps(lat_max, lon_max)):
+            return 0.0
+        if lat_min > lat_max or lon_min > lon_max:
+            return 0.0
         diagonal = _haversine_m(lat_min, lon_min, lat_max, lon_max)
         return diagonal / 2
     except (ValueError, TypeError):
@@ -221,7 +271,7 @@ def _query_offline_gazetteer(query: str) -> dict | None:
     matches = [
         (needle, lat, lng, radius_m)
         for needle, lat, lng, radius_m in OFFLINE_GAZETTEER
-        if needle in query
+        if re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", query)
     ]
     if not matches:
         return None
@@ -246,6 +296,14 @@ def _query_nominatim(query: str) -> tuple[dict | None, bool]:
     if NOMINATIM_DISABLED:
         return None, False
 
+    # FastAPI can call sync functions from multiple worker threads. Serialize
+    # requests so the existing one-request-per-second limit holds per process.
+    with _nominatim_lock:
+        return _query_nominatim_serial(query)
+
+
+def _query_nominatim_serial(query: str) -> tuple[dict | None, bool]:
+
     global _last_nominatim_call
     wait = NOMINATIM_MIN_INTERVAL_S - (time.monotonic() - _last_nominatim_call)
     if wait > 0:
@@ -253,7 +311,9 @@ def _query_nominatim(query: str) -> tuple[dict | None, bool]:
 
     params = {
         "q": f"{query}, {LOCALITY_BIAS}",
-        "format": "json",
+        # JSONv2 supplies place_rank; legacy JSON does not. Its category field
+        # replaces class: https://nominatim.org/release-docs/latest/api/Output/
+        "format": "jsonv2",
         "limit": "1",
         "addressdetails": "0",
         "viewbox": VIEWBOX,
@@ -271,23 +331,30 @@ def _query_nominatim(query: str) -> tuple[dict | None, bool]:
     try:
         with urllib.request.urlopen(req, timeout=NOMINATIM_TIMEOUT_S) as resp:
             results = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as e:
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as e:
         logger.warning("Nominatim lookup failed for %r: %s", query, e)
         return None, False
     finally:
         _last_nominatim_call = time.monotonic()
 
+    if not isinstance(results, list):
+        logger.warning("Nominatim returned an unexpected response for %r", query)
+        return None, False
     if not results:
         return None, True  # Nominatim answered: genuinely nothing there
 
     hit = results[0]
+    if not isinstance(hit, dict):
+        return None, False
     try:
         rank = int(hit.get("place_rank", 0))
-        cls = hit.get("class", "")
+        cls = hit.get("category", hit.get("class", ""))
         lat = float(hit["lat"])
         lng = float(hit["lon"])
     except (KeyError, ValueError, TypeError):
-        return None, True
+        return None, False
+    if not _valid_gps(lat, lng) or not isinstance(cls, str):
+        return None, False
 
     base_radius = _radius_from_place_rank(rank)
     if base_radius is None:
@@ -327,12 +394,17 @@ def geocode_landmark(landmark: str) -> dict | None:
     Returns None if nothing usable was found (caller should fall through
     to nearby_inference / unresolved rather than guess).
     """
+    if not isinstance(landmark, str):
+        return None
     query = _normalize_landmark(landmark)
     if not query:
         return None
 
     if query in _CACHE:
-        return _CACHE[query]
+        cached = _CACHE[query]
+        if cached is None or _valid_geocode_hit(cached):
+            return cached
+        del _CACHE[query]  # A damaged cache entry must not crash a report batch.
 
     hit = _query_offline_gazetteer(query)
     if hit is not None:
@@ -353,10 +425,31 @@ def geocode_landmark(landmark: str) -> dict | None:
 
 
 def _valid_gps(lat: Any, lon: Any) -> bool:
+    if isinstance(lat, bool) or isinstance(lon, bool):
+        return False
     try:
         return -90.0 <= float(lat) <= 90.0 and -180.0 <= float(lon) <= 180.0
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
+
+
+def _valid_geocode_hit(hit: Any) -> bool:
+    if not isinstance(hit, dict) or not _valid_gps(hit.get("lat"), hit.get("lng")):
+        return False
+    radius = hit.get("radius_m")
+    return (
+        isinstance(radius, (int, float))
+        and not isinstance(radius, bool)
+        and 0 <= radius <= MAX_ACCEPTABLE_LANDMARK_RADIUS_M
+        and isinstance(hit.get("detail"), str)
+    )
+
+
+def _fact(report: dict, key: str) -> Any:
+    facts = report.get("extracted_json")
+    if isinstance(facts, dict) and key in facts:
+        return facts[key]
+    return report.get(key)
 
 
 def resolve_location(report: dict) -> LocationResult:
@@ -366,6 +459,8 @@ def resolve_location(report: dict) -> LocationResult:
     sibling reports - use `resolve_all` for the full pipeline.
     """
     report_id = report.get("id", "<unknown>")
+    if _fact(report, "relevant") is False:
+        return _unresolved(report_id, detail="irrelevant_report")
     lat, lon = report.get("gps_lat"), report.get("gps_lon")
 
     if _valid_gps(lat, lon):
@@ -379,14 +474,15 @@ def resolve_location(report: dict) -> LocationResult:
             detail="device_gps",
         )
 
-    landmark = (report.get("landmark") or "").strip()
+    landmark = _fact(report, "landmark")
+    landmark = landmark.strip() if isinstance(landmark, str) else ""
     if landmark:
         hit = geocode_landmark(landmark)
         if hit is not None:
             return LocationResult(
                 report_id=report_id,
-                lat=hit["lat"],
-                lng=hit["lng"],
+                lat=float(hit["lat"]),
+                lng=float(hit["lng"]),
                 uncertainty_radius_meters=hit["radius_m"],
                 resolution_method="landmark_geocode",
                 confidence=_confidence_for_landmark(hit["radius_m"]),
@@ -402,13 +498,15 @@ def resolve_location(report: dict) -> LocationResult:
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value)
+            value = datetime.fromisoformat(value)
         except ValueError:
             return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
     return None
 
 
@@ -416,19 +514,21 @@ def _infer_from_neighbors(
     report: dict, resolved: dict[str, tuple[LocationResult, dict]]
 ) -> LocationResult:
     report_id = report.get("id", "<unknown>")
-    disaster_type = report.get("disaster_type")
+    if _fact(report, "relevant") is False:
+        return _unresolved(report_id, detail="irrelevant_report")
+    disaster_type = _fact(report, "disaster_type")
     ts = _parse_timestamp(report.get("timestamp"))
 
     if not disaster_type or ts is None:
         return _unresolved(report_id, detail="no_disaster_type_or_timestamp")
 
     candidates: list[LocationResult] = []
-    for other_id, (other_result, other_report) in resolved.items():
+    for other_id, (other_result, other_report) in sorted(resolved.items()):
         if other_id == report_id:
             continue
         if other_result.resolution_method not in ("gps", "landmark_geocode"):
             continue  # only inherit from direct evidence, never chain inferences
-        if other_report.get("disaster_type") != disaster_type:
+        if _fact(other_report, "disaster_type") != disaster_type:
             continue
         other_ts = _parse_timestamp(other_report.get("timestamp"))
         if other_ts is None or abs(other_ts - ts) > NEARBY_TIME_WINDOW:
@@ -438,19 +538,53 @@ def _infer_from_neighbors(
     if len(candidates) < NEARBY_MIN_SAMPLES:
         return _unresolved(report_id, detail=f"only_{len(candidates)}_neighbors")
 
+    # A distant direct pin must not poison an otherwise tight group. Build a
+    # candidate group around every direct pin, retain only groups whose centroid
+    # spread passes the limit, then require one uniquely largest group. Equal
+    # groups are ambiguous because this report has no resolved position yet.
+    tight_groups: dict[frozenset[str], list[LocationResult]] = {}
+    for anchor in candidates:
+        nearby = [
+            candidate
+            for candidate in candidates
+            if _haversine_m(anchor.lat, anchor.lng, candidate.lat, candidate.lng)
+            <= 2 * NEARBY_MAX_CLUSTER_SPREAD_M
+        ]
+        if len(nearby) < NEARBY_MIN_SAMPLES:
+            continue
+        group_lat = sum(candidate.lat for candidate in nearby) / len(nearby)
+        group_lng = sum(candidate.lng for candidate in nearby) / len(nearby)
+        group_spread = max(
+            _haversine_m(candidate.lat, candidate.lng, group_lat, group_lng)
+            for candidate in nearby
+        )
+        if group_spread <= NEARBY_MAX_CLUSTER_SPREAD_M:
+            tight_groups[frozenset(item.report_id for item in nearby)] = nearby
+
+    if not tight_groups:
+        return _unresolved(report_id, detail="no_tight_neighbor_group")
+    largest_size = max(len(group) for group in tight_groups.values())
+    largest = [group for group in tight_groups.values() if len(group) == largest_size]
+    if len(largest) != 1:
+        return _unresolved(report_id, detail="ambiguous_neighbor_groups")
+    candidates = largest[0]
+
     centroid_lat = sum(c.lat for c in candidates) / len(candidates)
     centroid_lng = sum(c.lng for c in candidates) / len(candidates)
     spread_m = max(
         _haversine_m(c.lat, c.lng, centroid_lat, centroid_lng) for c in candidates
     )
 
-    if spread_m > NEARBY_MAX_CLUSTER_SPREAD_M:
-        return _unresolved(
-            report_id, detail=f"neighbors_too_scattered_spread={spread_m:.0f}m"
-        )
-
     # Always inflate beyond the observed spread: this is inherited, not observed.
-    radius_m = max(150.0, spread_m * 1.5 + 60.0)
+    radius_m = max(
+        150.0,
+        spread_m * 1.5 + 60.0,
+        max(
+            c.uncertainty_radius_meters
+            + _haversine_m(c.lat, c.lng, centroid_lat, centroid_lng)
+            for c in candidates
+        ),
+    )
     confidence = max(0.15, min(0.45, 0.15 + 0.05 * len(candidates)))
 
     return LocationResult(
@@ -473,8 +607,13 @@ def resolve_all(reports: list[dict]) -> list[LocationResult]:
     """
     pass1: dict[str, tuple[LocationResult, dict]] = {}
     for report in reports:
+        report_id = report.get("id")
+        if not isinstance(report_id, str) or not report_id:
+            raise ValueError("Each report requires a nonempty string id")
+        if report_id in pass1:
+            raise ValueError(f"Duplicate report id: {report_id}")
         result = resolve_location(report)
-        pass1[report.get("id", "<unknown>")] = (result, report)
+        pass1[report_id] = (result, report)
 
     final: list[LocationResult] = []
     for report in reports:

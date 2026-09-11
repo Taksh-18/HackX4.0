@@ -5,6 +5,8 @@ from math import isfinite
 
 def _number(value, default: float = 0.0) -> float:
     """Treat missing, invalid, or non-finite numeric signals as unavailable."""
+    if isinstance(value, bool):
+        return default
     try:
         result = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -51,7 +53,7 @@ def calculate_severity(extracted_facts: dict) -> float:
     # Each distinct urgent resource +1; each other resource +0.25; total cap +2.
     # Clamp the final result to [1, 10]. Confidence is scored separately.
     hazard_weight = {"FLOOD": 2.0, "FIRE": 3.0, "COLLAPSE": 3.0, "OTHER": 1.0}
-    event_type = str(extracted_facts.get("disaster_type") or "").upper()
+    event_type = str(extracted_facts.get("disaster_type") or "").strip().upper()
     score = 1.0 + hazard_weight.get(event_type, 0.0)
 
     trapped = max(0.0, _number(extracted_facts.get("trapped_count")))
@@ -60,9 +62,14 @@ def calculate_severity(extracted_facts: dict) -> float:
     if extracted_facts.get("access_impediment", False) is True:
         score += 2.0
 
+    demands = extracted_facts.get("resource_demands")
+    if demands is None:
+        demands = []
+    if not isinstance(demands, (list, tuple)):
+        raise ValueError("resource_demands must be a list of resource names or None")
     resources = {
         resource.strip().lower()
-        for resource in (extracted_facts.get("resource_demands") or [])
+        for resource in demands
         if isinstance(resource, str) and resource.strip()
     }
     urgent_resources = {"rescue_boat", "medical_evac", "ambulance", "fire_engine"}
@@ -74,7 +81,11 @@ def calculate_severity(extracted_facts: dict) -> float:
 
 
 def get_action_priority(confidence: float, severity: float) -> str:
-    """Apply inclusive confidence >= 70 and severity >= 7 thresholds."""
+    """Apply inclusive thresholds; invalid scores must not silently suppress."""
+    if not isfinite(confidence) or not 0.0 <= confidence <= 100.0:
+        raise ValueError("confidence must be finite and between 0 and 100")
+    if not isfinite(severity) or not 1.0 <= severity <= 10.0:
+        raise ValueError("severity must be finite and between 1 and 10")
     if severity >= 7.0:
         return "CRITICAL_DISPATCH" if confidence >= 70.0 else "DEPLOY_SCOUT"
     return "MONITOR" if confidence >= 70.0 else "SUPPRESSED"

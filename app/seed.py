@@ -4,44 +4,46 @@ from app.db import SessionLocal, init_db
 from app.models import Incident, IncidentReport, Report
 
 
-def seed():
-    init_db()
+def seed(session_factory=SessionLocal, *, initialize: bool = True) -> bool:
+    """Insert demo data once; return True only when rows were created."""
+    if initialize:
+        init_db()
     incident_id = "INC_042"
     start = datetime(2026, 9, 11, 8, 30, tzinfo=UTC)
-    # Synthetic Chennai flood scenario; these are not live citizen reports.
+    # Synthetic Mayur Vihar flood scenario; these are not live citizen reports.
     samples = [
         (
-            "rep_0001",
+            "demo_rep_0001",
             "demo_citizen_01",
             6,
-            13.0418,
-            80.2341,
-            "Floodwater near the T. Nagar community hall. Six people are "
-            "stranded; need a rescue boat.",
+            28.6084,
+            77.2951,
+            "Floodwater near Metro Pillar 42. Six people are stranded inside a "
+            "ground-floor shop and need a rescue boat.",
         ),
         (
-            "rep_0002",
+            "demo_rep_0002",
             "demo_citizen_02",
             4,
-            13.0420,
-            80.2343,
-            "Four people visible on the community hall steps. Water is rising; "
+            28.6081,
+            77.2954,
+            "Four people are stuck by Metro Pillar 42. Water is rising; they "
             "need life jackets.",
         ),
         (
-            "rep_0003",
+            "demo_rep_0003",
             "demo_citizen_03",
             5,
-            13.0416,
-            80.2339,
-            "At least five people waiting for rescue near the hall. Need a boat "
-            "and first aid.",
+            28.6086,
+            77.2949,
+            "Five people are waiting for rescue near Mayur Vihar metro. They "
+            "need a boat and first aid.",
         ),
     ]
-    with SessionLocal.begin() as db:
+    with session_factory.begin() as db:
         if db.get(Incident, incident_id) is not None:
             print(f"{incident_id} already exists; seed left unchanged.")
-            return
+            return False
 
         reports = [
             Report(
@@ -53,10 +55,13 @@ def seed():
                 gps_lon=lon,
                 extracted_json={
                     "disaster_type": "FLOOD",
-                    "landmark": "T. Nagar community hall",
+                    "landmark": "Metro Pillar 42",
                     "trapped_count": trapped,
-                    "resources": ["rescue_boat", "life_jackets", "first_aid"],
-                    "severity": 8.5,
+                    "claim": text,
+                    "resource_demands": ["rescue_boat", "life_jackets", "first_aid"],
+                    "access_impediment": True,
+                    "event_time_hint": None,
+                    "severity": 9,
                     "relevant": True,
                 },
             )
@@ -65,9 +70,9 @@ def seed():
         incident = Incident(
             id=incident_id,
             event_type="FLOOD",
-            title="DEMO: People stranded near T. Nagar community hall",
-            center_lat=13.0418,
-            center_lon=80.2341,
+            title="DEMO: People stranded near Metro Pillar 42",
+            center_lat=28.6084,
+            center_lon=77.2951,
             uncertainty_radius_m=150.0,
             severity_score=8.5,
             confidence_score=88.0,
@@ -106,6 +111,7 @@ def seed():
             ]
         )
     print(f"Seeded {incident_id} with 3 reports. GET /incidents/{incident_id}")
+    return True
 
 
 if __name__ == "__main__":

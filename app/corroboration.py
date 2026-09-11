@@ -1,6 +1,7 @@
 """Perceptual image deduplication and conservative witness counting."""
 
 import json
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -11,6 +12,14 @@ from PIL import Image, ImageDraw, ImageOps
 KNOWN_OLD_HASHES: dict[str, str] = {
     # "verified_2023_flood": "<64-bit pHash from compute_phash(old_image_path)>",
 }
+
+# Only explicit provenance is used; ordinary @mentions are not deduplication.
+_REPOST_SOURCE = re.compile(
+    r"(?:^\s*(?:RT|repost|forwarded)\s+|"
+    r"\b(?:via|source|shared\s+from|reposted\s+from|forwarded\s+from)\s*:?[ \t]*)"
+    r"(@[A-Za-z0-9_]+)",
+    re.IGNORECASE,
+)
 
 
 def compute_phash(image_path: str) -> str:
@@ -24,14 +33,13 @@ def compute_phash(image_path: str) -> str:
 
 
 def is_duplicate(hash1: str, hash2: str, threshold: int = 5) -> bool:
-    """Return whether equal-size pHashes differ by at most threshold bits."""
-    if not isinstance(threshold, int) or threshold < 0:
+    """Compare 64-bit pHashes produced by compute_phash using Hamming distance."""
+    if isinstance(threshold, bool) or not isinstance(threshold, int) or threshold < 0:
         raise ValueError("threshold must be a nonnegative integer")
-    first = imagehash.hex_to_hash(hash1)
-    second = imagehash.hex_to_hash(hash2)
-    if first.hash.shape != second.hash.shape:
-        raise ValueError("pHashes must have the same size")
-    return bool(first - second <= threshold)
+    for value in (hash1, hash2):
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{16}", value):
+            raise ValueError("pHashes must contain exactly 16 hexadecimal characters")
+    return (int(hash1, 16) ^ int(hash2, 16)).bit_count() <= threshold
 
 
 class _Groups:
@@ -93,10 +101,12 @@ def calculate_corroboration(
     hashes raise ValueError instead of treating unverified images as independent.
     Each report must have a unique ID and a nonempty source_user.
 
-    Witness groups merge when reports share an author OR near-duplicate images.
+    Witness groups merge when reports share an author, explicitly attribute a
+    repost to the same origin, OR use near-duplicate images. This also handles
+    text-only RT @origin posts; unattributed rephrasings are not detected.
     Image groups merge only through near-duplicate hashes. Both are transitive:
     A matching B and B matching C produces one group even if A does not match C.
-    Authors are compared case-insensitively, ignoring surrounding whitespace.
+    Authors are compared case-insensitively, ignoring whitespace and a leading @.
     Recycled-media count is the number of flagged reports, not distinct images.
     """
     report_by_id = {}
@@ -106,7 +116,14 @@ def calculate_corroboration(
             raise ValueError(f"Duplicate report ID: {report_id}")
         report_by_id[report_id] = report
 
-    report_ids = sorted(set(cluster["report_ids"]))
+    report_ids = cluster.get("report_ids")
+    if not isinstance(report_ids, list):
+        raise ValueError("cluster report_ids must be a list")
+    if any(not isinstance(report_id, str) or not report_id for report_id in report_ids):
+        raise ValueError("cluster report IDs must be nonempty strings")
+    if len(report_ids) != len(set(report_ids)):
+        raise ValueError("cluster contains duplicate report IDs")
+    report_ids = sorted(report_ids)
     selected = []
     for report_id in report_ids:
         if report_id not in report_by_id:
@@ -124,11 +141,18 @@ def calculate_corroboration(
     images = []
     recycled_count = 0
     for index, report in enumerate(selected):
-        author = report["source_user"].strip().casefold()
-        if author in authors:
-            witnesses.merge(index, authors[author])
-        else:
-            authors[author] = index
+        author = report["source_user"].strip().removeprefix("@").casefold()
+        if not author:
+            raise ValueError(f"Invalid source_user for report: {report['id']}")
+        origin = _REPOST_SOURCE.search(report.get("raw_text") or "")
+        identities = {author}
+        if origin:
+            identities.add(origin.group(1).removeprefix("@").casefold())
+        for identity in sorted(identities):
+            if identity in authors:
+                witnesses.merge(index, authors[identity])
+            else:
+                authors[identity] = index
 
         report_hash = media_hashes.get(report["id"])
         if report_hash:

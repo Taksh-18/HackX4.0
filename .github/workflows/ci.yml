@@ -17,3 +17,4 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
+      - run: python -m pip wheel . --no-deps --no-build-isolation --wheel-dir /tmp/cdis-wheel

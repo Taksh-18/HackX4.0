@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -46,11 +48,16 @@ FACT EXTRACTION
 - landmark is the raw location phrase present in the text, including vague phrases
   such as "near the metro station". Return null when no location phrase is stated.
 - trapped_count is a number only when the text states or clearly encodes an exact
-  count. "3 people", "a couple", and "both workers" may yield 3, 2, and 2.
+  count of people who are trapped or unable to escape. "3 people trapped", "a
+  couple stuck", and "both workers trapped" may yield 3, 2, and 2. Counts of shops,
+  vehicles, observers, evacuees who are already safe, or untrapped people are NOT
+  trapped counts. Preserve negation: "3 people are not trapped" is not a count of
+  3 trapped people. Use 0 only when the report explicitly says nobody is trapped.
   Words such as "several", "many", "a group", or "people" do not provide a count;
   return null. Do not estimate.
-- resource_demands contains normalized snake_case resource names that are directly
-  requested or plainly required by the stated claim, such as rescue_boat,
+- resource_demands contains normalized snake_case resource names that are
+  directly requested or unambiguously described as needed by the stated claim,
+  such as rescue_boat,
   medical_evac, ambulance, fire_engine, food, drinking_water, shelter,
   life_jackets, ropes, police, or debris_clearance. Do not invent generic needs.
 - access_impediment=true when the report claims a road, bridge, entrance, route, or
@@ -63,6 +70,10 @@ FACT EXTRACTION
   now", "20 mins ago", "since morning", or "at 2 pm". The report timestamp is
   metadata and must not be copied into this field. Return null if the text has no
   time phrase.
+- media_url is a reference only; you have NOT inspected the image. GPS and the
+  report timestamp are metadata, not proof of the claim or raw text landmarks.
+- Reposts and forwarded claims can be relevant. Preserve their attribution and
+  uncertainty without presenting them as this author's firsthand observation.
 
 CONTRADICTIONS
 - Treat every report independently. If one report says a bridge collapsed, extract
@@ -77,7 +88,7 @@ Return only the schema-constrained JSON object with no commentary.
 class ExtractedReport(BaseModel):
     """Validated representation stored in reports.extracted_json."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     relevant: bool
     disaster_type: Literal["FLOOD", "FIRE", "COLLAPSE", "OTHER"] | None
@@ -136,30 +147,43 @@ def _irrelevant_fallback() -> ExtractedReport:
 
 
 def _model_for_client(client) -> str:
-    configured_model = os.getenv("EXTRACTION_MODEL")
+    configured_model = os.getenv("EXTRACTION_MODEL", "").strip()
     if configured_model:
         return configured_model
 
-    base_url = str(getattr(client, "base_url", ""))
-    if "api.groq.com" in base_url:
+    hostname = urlparse(str(getattr(client, "base_url", ""))).hostname
+    if hostname == "api.groq.com":
         return "openai/gpt-oss-20b"
     return "gpt-4o-mini"
 
 
 def filter_and_extract(report: dict, client) -> ExtractedReport:
-    """Extract one report using strict OpenAI-compatible structured output."""
-    report_id = report.get("id", "<unknown>")
-    report_payload = {
-        "id": report.get("id"),
-        "source_user": report.get("source_user"),
-        "raw_text": report.get("raw_text"),
-        "media_url": report.get("media_url"),
-        "timestamp": report.get("timestamp"),
-        "gps_lat": report.get("gps_lat"),
-        "gps_lon": report.get("gps_lon"),
-    }
+    """Extract one report; API/schema failures return noise and log the error type.
 
+    The log distinguishes failed extraction from an actual relevance decision.
+    Failures deliberately use the requested all-empty fallback; no success or
+    failure metadata is added to the extracted_json contract.
+    """
+    report_id = report.get("id", "<unknown>")
     try:
+        raw_text = report.get("raw_text")
+        if not isinstance(raw_text, str) or not raw_text.strip():
+            raise ValueError("report raw_text must be a nonempty string")
+        report_payload = {
+            key: report.get(key)
+            for key in (
+                "id",
+                "source_user",
+                "raw_text",
+                "media_url",
+                "timestamp",
+                "gps_lat",
+                "gps_lon",
+            )
+        }
+        # SQLAlchemy and Pydantic report objects often provide datetime values.
+        if isinstance(report_payload["timestamp"], datetime):
+            report_payload["timestamp"] = report_payload["timestamp"].isoformat()
         response = client.chat.completions.create(
             model=_model_for_client(client),
             messages=[
@@ -174,13 +198,20 @@ def filter_and_extract(report: dict, client) -> ExtractedReport:
             temperature=0,
         )
 
-        content = response.choices[0].message.content
+        choice = response.choices[0]
+        if choice.finish_reason != "stop":
+            raise ValueError("model did not finish a complete extraction")
+        if getattr(choice.message, "refusal", None):
+            raise ValueError("model refused extraction")
+        content = choice.message.content
         if not content:
             raise ValueError("model returned no structured extraction")
-        arguments = json.loads(content)
-        return ExtractedReport.model_validate(arguments)
-    except Exception:
-        logger.exception("Extraction failed for report %s", report_id)
+        return ExtractedReport.model_validate_json(content)
+    except Exception as exc:
+        # SDK exception messages may include response bodies or credentials.
+        logger.error(
+            "Extraction failed for report %s (%s)", report_id, type(exc).__name__
+        )
         return _irrelevant_fallback()
 
 
@@ -239,21 +270,42 @@ def _examples() -> list[dict[str, Any]]:
 def _client_from_env():
     from openai import OpenAI
 
-    groq_key = os.getenv("GROQ_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    api_key = groq_key or openai_key
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    configured_key = os.getenv("EXTRACTION_API_KEY", "").strip()
+    configured_base_url = os.getenv("EXTRACTION_BASE_URL", "").strip()
+
+    if configured_base_url:
+        parsed_url = urlparse(configured_base_url)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
+            raise ValueError("EXTRACTION_BASE_URL must be an http(s) API URL")
+        base_url = configured_base_url
+        if parsed_url.hostname == "api.groq.com":
+            legacy_groq_key = openai_key if openai_key.startswith("gsk_") else ""
+            api_key = configured_key or groq_key or legacy_groq_key
+        elif parsed_url.hostname == "api.openai.com":
+            api_key = configured_key or openai_key
+            if api_key.startswith("gsk_"):
+                raise ValueError("A Groq key cannot be used at the OpenAI endpoint")
+        else:
+            # Explicit custom providers may use the conventional OPENAI_API_KEY.
+            api_key = configured_key or openai_key
+    else:
+        api_key = configured_key or groq_key or openai_key
+        using_groq = api_key.startswith("gsk_") or (
+            not configured_key and bool(groq_key)
+        )
+        base_url = (
+            "https://api.groq.com/openai/v1"
+            if using_groq
+            else "https://api.openai.com/v1"
+        )
     if not api_key:
         raise RuntimeError(
-            "No API key found. Set GROQ_API_KEY for Groq or OPENAI_API_KEY for OpenAI."
+            "No API key found for the selected provider. Set GROQ_API_KEY, "
+            "OPENAI_API_KEY, or EXTRACTION_API_KEY for a custom endpoint."
         )
-
-    configured_base_url = os.getenv("EXTRACTION_BASE_URL")
-    using_groq = bool(groq_key) or api_key.startswith("gsk_")
-    if configured_base_url:
-        return OpenAI(api_key=api_key, base_url=configured_base_url)
-    if using_groq:
-        return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=2)
 
 
 if __name__ == "__main__":

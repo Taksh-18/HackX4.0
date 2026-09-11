@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class Schema(BaseModel):
@@ -9,18 +9,32 @@ class Schema(BaseModel):
 
 
 class Extraction(Schema):
-    disaster_type: str | None = None
+    """Read both current extraction output and older/unprocessed stored reports."""
+
+    relevant: bool | None = None
+    disaster_type: Literal["FLOOD", "FIRE", "COLLAPSE", "OTHER"] | None = None
+    claim: str | None = None
     landmark: str | None = None
     trapped_count: int | None = Field(default=None, ge=0)
-    resources: list[str] = Field(default_factory=list)
-    severity: float | None = Field(default=None, ge=0, le=10)
-    relevant: bool | None = None
+    resource_demands: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("resource_demands", "resources"),
+    )
+    access_impediment: bool = False
+    # Current extractions use integers; retain legacy seed values such as 8.5.
+    severity: int | float | None = Field(default=None, ge=0, le=10)
+    event_time_hint: str | None = None
 
 
 class Evidence(Schema):
     total_reports: int = Field(default=0, ge=0)
     independent_sources: int = Field(default=0, ge=0)
     unique_images: int = Field(default=0, ge=0)
+    recycled_media_detected: int = Field(default=0, ge=0)
+    geo_agreement: float = Field(default=0.0, ge=0, le=1)
+    fresh_media_ratio: float = Field(default=0.0, ge=0, le=1)
+    external_verification_hits: int | None = Field(default=0, ge=0)
+    has_contradiction: bool = False
 
 
 class AggregatedNeeds(Schema):
@@ -42,6 +56,20 @@ class ReportCreate(Schema):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     gps_lat: float | None = Field(default=None, ge=-90, le=90)
     gps_lon: float | None = Field(default=None, ge=-180, le=180)
+
+    @field_validator("source_user", "raw_text")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("timestamp")
+    @classmethod
+    def normalize_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class ReportRead(ReportCreate):

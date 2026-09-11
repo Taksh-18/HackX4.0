@@ -18,23 +18,34 @@ Run: python -m scripts.geolocation_smoke_test   (from the HackX4.0/ directory)
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
+
+# This script is explicitly an offline check; set before importing the module.
+os.environ.setdefault("CDIS_OFFLINE_GEOCODE", "1")
 
 from app.geolocation import resolve_all
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "simulated_reports.json"
 
-_FLOOD_WORDS = ("flood", "water", "waterlog", "rain", "current", "submerged")
-_COLLAPSE_WORDS = (
-    "collaps",
-    "crack",
-    "debris",
-    "fallen",
-    "given way",
-    "sinking",
+_FLOOD_PATTERNS = (
+    r"\bflood\w*",
+    r"\bwater\b",
+    r"\bwaterlog\w*",
+    r"\brain(?:ing|fall)?\b",
+    r"\bcurrent\b",
+    r"\bsubmerg\w*",
 )
-_FIRE_WORDS = ("fire", "smoke", "blaze")
+_COLLAPSE_PATTERNS = (
+    r"\bcollaps\w*",
+    r"\bcrack\w*",
+    r"\bdebris\b",
+    r"\bfallen\b",
+    r"\bgiven way\b",
+    r"\bsinking\b",
+)
+_FIRE_PATTERNS = (r"\bfire\b", r"\bsmoke\b", r"\bblaze\b")
 
 # Longer/more specific phrases first so e.g. "Metro Pillar 42" wins over "metro".
 _KNOWN_LANDMARKS = [
@@ -63,12 +74,12 @@ _NEAR_PATTERN = re.compile(
 
 def _placeholder_disaster_type(text: str) -> str | None:
     low = text.lower()
-    if any(w in low for w in _FLOOD_WORDS):
-        return "FLOOD"
-    if any(w in low for w in _COLLAPSE_WORDS):
+    if any(re.search(pattern, low) for pattern in _COLLAPSE_PATTERNS):
         return "COLLAPSE"
-    if any(w in low for w in _FIRE_WORDS):
+    if any(re.search(pattern, low) for pattern in _FIRE_PATTERNS):
         return "FIRE"
+    if any(re.search(pattern, low) for pattern in _FLOOD_PATTERNS):
+        return "FLOOD"
     return None
 
 
@@ -89,6 +100,7 @@ def _placeholder_extract(report: dict) -> dict:
     landmark = _placeholder_landmark(report["raw_text"]) if disaster_type else None
     return {
         **report,
+        "relevant": disaster_type is not None,
         "disaster_type": disaster_type,
         "landmark": landmark,
     }
@@ -135,7 +147,7 @@ def main() -> None:
                 f"conf={res.confidence:.2f} "
                 f"pin={_fmt(res.lat)},{_fmt(res.lng)} "
                 f"radius={_fmt(res.uncertainty_radius_meters, 0)}m"
-                f" | \"{report['raw_text'][:70]}...\""
+                f' | "{report["raw_text"][:70]}..."'
             )
 
 

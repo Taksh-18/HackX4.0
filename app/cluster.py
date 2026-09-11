@@ -9,8 +9,19 @@ MIN_RADIUS_M = 50.0
 EARTH_RADIUS_M = 6_371_008.8
 
 
+def _coordinate(value, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError("coordinates must be finite numbers, not booleans")
+    value = float(value)
+    if not isfinite(value) or not minimum <= value <= maximum:
+        raise ValueError("coordinates are non-finite or out of range")
+    return value
+
+
 def haversine(lat1, lon1, lat2, lon2) -> float:
-    """Return great-circle distance in meters; inputs are degrees."""
+    """Return great-circle distance in meters; reject invalid coordinates."""
+    lat1, lat2 = (_coordinate(lat, -90, 90) for lat in (lat1, lat2))
+    lon1, lon2 = (_coordinate(lon, -180, 180) for lon in (lon1, lon2))
     phi1, phi2 = radians(lat1), radians(lat2)
     delta_phi = phi2 - phi1
     delta_lambda = radians(lon2 - lon1)
@@ -48,11 +59,13 @@ def cluster_reports(reports: list[dict]) -> list[dict]:
         try:
             report_id = report["id"]
             event_type = report["extracted_json"]["disaster_type"]
-            lat = float(report["resolved_lat"])
-            lon = float(report["resolved_lon"])
+            lat = _coordinate(report["resolved_lat"], -90, 90)
+            lon = _coordinate(report["resolved_lon"], -180, 180)
+            if isinstance(report["uncertainty_radius_m"], bool):
+                raise ValueError("uncertainty must be a number, not a boolean")
             radius = float(report["uncertainty_radius_m"])
             time = _timestamp(report["timestamp"])
-            if not isinstance(report_id, str) or not report_id:
+            if not isinstance(report_id, str) or not report_id.strip():
                 raise ValueError("id must be a nonempty string")
             if report_id in seen_ids:
                 raise ValueError(f"duplicate report id: {report_id}")
@@ -62,7 +75,7 @@ def cluster_reports(reports: list[dict]) -> list[dict]:
                 raise ValueError("coordinates and uncertainty must be finite")
             if not (-90 <= lat <= 90 and -180 <= lon <= 180 and radius >= 0):
                 raise ValueError("invalid coordinates or negative uncertainty")
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"Invalid report at index {len(prepared)}: {exc}") from exc
         seen_ids.add(report_id)
         prepared.append((time, report_id, event_type, lat, lon, radius))
@@ -91,6 +104,7 @@ def cluster_reports(reports: list[dict]) -> list[dict]:
                 "uncertainty_radius_m": MIN_RADIUS_M,
                 "lat_sum": 0.0,
                 "lon_sum": 0.0,
+                "lon_reference": lon,
                 "max_radius": 0.0,
                 "latest_time": time,
             }
@@ -98,12 +112,15 @@ def cluster_reports(reports: list[dict]) -> list[dict]:
 
         best["report_ids"].append(report_id)
         best["lat_sum"] += lat
-        best["lon_sum"] += lon
+        # Unwrap around the first longitude so a cluster straddling +/-180
+        # keeps its centroid near the dateline rather than jumping to zero.
+        reference = best["lon_reference"]
+        best["lon_sum"] += reference + (lon - reference + 180.0) % 360.0 - 180.0
         best["max_radius"] = max(best["max_radius"], radius)
         best["latest_time"] = time
         count = len(best["report_ids"])
         best["center_lat"] = best["lat_sum"] / count
-        best["center_lon"] = best["lon_sum"] / count
+        best["center_lon"] = (best["lon_sum"] / count + 180.0) % 360.0 - 180.0
         best["uncertainty_radius_m"] = max(
             MIN_RADIUS_M, best["max_radius"] / sqrt(count)
         )
