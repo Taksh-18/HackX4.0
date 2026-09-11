@@ -3,6 +3,9 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
+from app.image_analysis import ImageAnalysis
+from app.misinformation import MisinformationRisk
+
 
 class Schema(BaseModel):
     model_config = ConfigDict(from_attributes=True, allow_inf_nan=False)
@@ -26,6 +29,26 @@ class Extraction(Schema):
     event_time_hint: str | None = None
 
 
+class ImageAnalysisRead(ImageAnalysis):
+    """One media item's content analysis, attributed to the report it came from."""
+
+    report_id: str
+
+
+class ContradictionGroup(Schema):
+    """Reports about the same event/landmark split into affirming vs denying.
+
+    This is the structured view behind `Evidence.has_contradiction`: a
+    single boolean collapses a whole cluster, this names which report IDs
+    assert the event and which explicitly deny it.
+    """
+
+    event_type: str | None = None
+    landmark: str | None = None
+    affirming_report_ids: list[str] = Field(default_factory=list)
+    denying_report_ids: list[str] = Field(default_factory=list)
+
+
 class Evidence(Schema):
     total_reports: int = Field(default=0, ge=0)
     independent_sources: int = Field(default=0, ge=0)
@@ -35,6 +58,20 @@ class Evidence(Schema):
     fresh_media_ratio: float = Field(default=0.0, ge=0, le=1)
     external_verification_hits: int | None = Field(default=0, ge=0)
     has_contradiction: bool = False
+
+    # Additive fields below. All have defaults so evidence_json rows written
+    # before these existed still validate; old consumers reading only the
+    # fields above are unaffected.
+    duplicate_image_groups: int = Field(default=0, ge=0)
+    duplicate_text_groups: int = Field(default=0, ge=0)
+    contradiction_groups: list[ContradictionGroup] = Field(default_factory=list)
+    image_analyses: list[ImageAnalysisRead] = Field(default_factory=list)
+    misinformation: MisinformationRisk = Field(default_factory=MisinformationRisk)
+    # Named components behind confidence_score - see app.scoring.confidence_breakdown.
+    confidence_breakdown: dict[str, float] = Field(default_factory=dict)
+    # Plain-language caveats about what this evidence does and does not prove
+    # (e.g. independent_sources is estimated, not verified unique identity).
+    limitations: list[str] = Field(default_factory=list)
 
 
 class AggregatedNeeds(Schema):
@@ -100,7 +137,8 @@ class IncidentCreate(Schema):
 
 
 class IncidentRead(IncidentCreate):
-    pass
+    # None for incidents persisted before this column existed; see db.py.
+    updated_at: datetime | None = None
 
 
 class IncidentReportCreate(Schema):
@@ -130,7 +168,8 @@ class MediaCreate(Schema):
 
 
 class MediaRead(MediaCreate):
-    pass
+    # None when no image-content analysis has run yet, or none was available.
+    analysis_json: ImageAnalysis | None = None
 
 
 class EvidenceRead(Schema):
@@ -148,6 +187,10 @@ class MapIncidentRead(Schema):
     action_priority: Literal[
         "CRITICAL_DISPATCH", "DEPLOY_SCOUT", "MONITOR", "SUPPRESSED"
     ]
+
+
+class MediaUploadRead(Schema):
+    media_url: str
 
 
 class ActionRead(Schema):

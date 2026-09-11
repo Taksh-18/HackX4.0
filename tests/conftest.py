@@ -10,6 +10,7 @@ itself.
 import pytest
 
 from app import geolocation
+from app.image_analysis import clear_cache as clear_image_analysis_cache
 from app.pipeline import reset_extraction_client
 
 
@@ -27,3 +28,12 @@ def _offline_extraction(monkeypatch):
     reset_extraction_client()
     yield
     reset_extraction_client()
+
+
+@pytest.fixture(autouse=True)
+def _offline_image_analysis(monkeypatch):
+    """Force the safe no-op image analyzer; never call a vision model in tests."""
+    monkeypatch.setenv("CDIS_OFFLINE_IMAGE_ANALYSIS", "1")
+    clear_image_analysis_cache()
+    yield
+    clear_image_analysis_cache()

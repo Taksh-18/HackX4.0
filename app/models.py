@@ -43,6 +43,11 @@ class Incident(Base):
     evidence_json: Mapped[dict] = mapped_column(JSON, default=dict)
     aggregated_needs_json: Mapped[dict] = mapped_column(JSON, default=dict)
     timeline_json: Mapped[list] = mapped_column(JSON, default=list)
+    # Set on every pipeline (re)computation and every responder-state change;
+    # backs the GET /incidents/updates polling endpoint. Nullable so rows
+    # written before this column existed remain valid (see db.py's idempotent
+    # column migration).
+    updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     report_links: Mapped[list["IncidentReport"]] = relationship()
 
 
@@ -67,3 +72,7 @@ class Media(Base):
     is_duplicate_of: Mapped[str | None] = mapped_column(
         ForeignKey("media.id"), nullable=True
     )
+    # Validated app.image_analysis.ImageAnalysis, stored as JSON. Nullable:
+    # no analysis has run yet, or none was available (offline/no provider).
+    # See db.py's idempotent column migration for existing databases.
+    analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

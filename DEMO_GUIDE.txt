@@ -1,0 +1,277 @@
+================================================================================
+INCIDENT OPS — CROWDSOURCED DISASTER INTELLIGENCE SYSTEM (CDIS)
+PS #5: Crowdsourced Disaster Intelligence
+Judge table demo guide
+================================================================================
+
+
+1. WHAT THIS PROJECT IS
+--------------------------------------------------------------------------------
+A working system that turns raw citizen/social reports (text + photos +
+location) into a verified, prioritized, explainable feed of disaster
+incidents that a response agency can act on — the exact problem PS #5 asks
+for. It is not a mockup: every screen is wired to a real FastAPI backend
+that actually runs relevance filtering, geolocation, deduplication,
+corroboration, contradiction/misinformation detection, and confidence
+scoring on whatever reports come in, live.
+
+One-line pitch:
+  "Citizens report what they see. Our pipeline decides what's real, where
+   it is, how urgent it is, and how sure we are — before a responder ever
+   looks at it."
+
+
+2. PROBLEM-STATEMENT MAPPING (PS #5 requirements -> what's implemented)
+--------------------------------------------------------------------------------
+Required capability              Status         Where
+--------------------------------------------------------------------------------
+Relevance filtering               REAL           app/extraction.py (LLM) /
+                                                  app/offline_extraction.py
+                                                  (deterministic fallback,
+                                                  no API key needed)
+Geolocation w/o explicit GPS      REAL           app/geolocation.py — GPS ->
+                                                  landmark geocoding -> nearby-
+                                                  report inference, in that
+                                                  order, each with its own
+                                                  confidence + uncertainty
+Image duplicate/reuse detection   REAL           app/corroboration.py —
+                                                  perceptual hash (pHash) +
+                                                  Hamming distance, checked
+                                                  against a known-recycled-
+                                                  image registry
+Image damage/content analysis     REAL, OPTIONAL app/image_analysis.py — runs
+                                                  when a vision-capable model
+                                                  is configured; degrades to
+                                                  an honest "not analyzed"
+                                                  otherwise, never fabricated
+Corroboration (independent        REAL           app/cluster.py +
+  sources, geo agreement)                        app/corroboration.py
+Contradiction detection           REAL           app/pipeline.py — explicit-
+                                                  denial regex + structured
+                                                  affirming-vs-denying report
+                                                  groups
+Misinformation risk               REAL           app/misinformation.py —
+                                                  deterministic, explainable,
+                                                  bounded score; NEVER claims
+                                                  proof of falsehood
+                                                  (proven_false is hard-coded
+                                                  False in every code path)
+Confidence + severity scoring     REAL           app/scoring.py — documented
+                                                  weighted formula, full
+                                                  breakdown exposed via API
+Operational output (prioritized   REAL           GET /incidents, sorted by
+  feed, not a raw firehose)                      severity; action_priority
+                                                  is deterministic:
+                                                  CRITICAL_DISPATCH /
+                                                  DEPLOY_SCOUT / MONITOR /
+                                                  SUPPRESSED
+BONUS: transparent confidence     REAL           evidence_json.
+  layer                                          confidence_breakdown shows
+                                                  the named weighted
+                                                  components behind every
+                                                  score, not just a number
+--------------------------------------------------------------------------------
+
+Honest scope limits (say this proactively, it builds credibility):
+  - High-volume live social ingestion: a real, working Reddit connector was
+    built (scripts/reddit_connector.py) but is deliberately NOT run against
+    live data — Reddit's Responsible Builder Policy requires prior explicit
+    approval before any API access, which isn't achievable on a hackathon
+    timeline. A local stream simulator (scripts/simulate_stream.py) replays
+    a real 50-report synthetic dataset through the exact same pipeline
+    instead, proving the ingestion path without a ToS violation.
+  - Image-content analysis (what's IN a photo) is real code but needs a
+    vision-capable LLM configured; without one it honestly reports
+    "not analyzed" rather than faking a result.
+  - Independent-source counting is a conservative estimate (usernames +
+    repost attribution + image similarity), not verified unique-human
+    identity — the UI says this explicitly on every incident.
+
+
+3. ARCHITECTURE
+--------------------------------------------------------------------------------
+Two processes, talking over HTTP:
+
+  Backend   FastAPI + SQLAlchemy + SQLite   (Python 3.11)
+            app/main.py            - API routes
+            app/pipeline.py        - orchestrates every stage below
+            app/extraction.py      - LLM relevance + fact extraction
+            app/offline_extraction.py - deterministic no-API-key fallback
+            app/geolocation.py     - GPS / landmark / nearby-inference
+            app/cluster.py         - distance+time+type clustering
+            app/corroboration.py   - pHash dedup, witness counting
+            app/dedup.py           - duplicate/near-duplicate report TEXT
+            app/image_analysis.py  - vision-model image-content analysis
+            app/misinformation.py  - deterministic misinformation risk
+            app/scoring.py         - confidence, severity, priority
+            app/verification.py    - optional external verification (off
+                                      by default, degrades safely)
+
+  Frontend  React + TypeScript + Vite + Tailwind, styled to match a
+            Stitch-designed "Calm Intelligence" system (Material Symbols
+            icons, JetBrains Mono for IDs/coords/timestamps).
+            /incidents        - Intelligence dashboard (triage queue + map)
+            /incidents/:id    - Incident detail (evidence, confidence
+                                breakdown, contradiction/misinformation,
+                                responder actions)
+            /map              - Full operational map
+            /reports          - Citizen report submission form
+
+The pipeline, in order, for every report:
+  1. Relevance filtering + fact extraction (disaster type, landmark,
+     trapped count, resource needs, severity signal)
+  2. Geolocation (GPS -> landmark geocode -> nearby-report inference)
+  3. Text deduplication (near-identical/reposted text grouped)
+  4. Image hashing + optional content analysis (dedup always runs;
+     vision analysis only if a provider is configured)
+  5. Clustering (distance + time + disaster type)
+  6. Corroboration (independent witness count vs. total reports)
+  7. Contradiction / misinformation scoring
+  8. Confidence + severity scoring (documented weighted formula)
+  9. Action priority assignment (deterministic thresholds)
+ 10. Persistence — incident created or updated, ID and responder state
+     survive re-runs (idempotent)
+
+
+4. HOW TO START THE SYSTEM (do this before judges arrive)
+--------------------------------------------------------------------------------
+Terminal 1 — backend:
+    cd HackX4.0
+    source .venv/bin/activate
+    set -a; source .env; set +a          # loads GROQ_API_KEY etc if present
+    export CDIS_OFFLINE_GEOCODE=1
+    uvicorn app.main:app --port 8000
+
+Terminal 2 — frontend:
+    cd HackX4.0/frontend
+    npm run dev
+
+Open in browser: http://localhost:5173  (redirects to /incidents)
+
+Sanity check both are alive:
+    curl http://localhost:8000/health      -> {"status":"ok"}
+    curl -I http://localhost:5173/         -> 200
+
+Backend test suite (133 tests, all passing) — good to run once before the
+table opens, as a "yes it actually works" confidence check:
+    pytest
+
+
+5. THE LIVE DEMO SCRIPT (aim for ~3-4 minutes)
+--------------------------------------------------------------------------------
+Open two things side by side: the Intelligence dashboard (/incidents) on
+one screen/tab, and the Citizen Submission form (/reports) on another.
+
+STEP 0 — Orient them (15s)
+  "This is the responder side. Right now there's [N] incidents — these
+   came from a bundled 50-report synthetic dataset simulating a Mayur
+   Vihar flash flood, replayed through the real pipeline via
+   scripts/simulate_stream.py. Nothing here is hardcoded — it's all
+   database state produced by the pipeline."
+
+STEP 1 — Submit citizen report #1 (30s)
+  On /reports: describe a disaster, tap "Use My Current Location" for real
+  GPS, attach a real photo, give a name. Submit.
+  Say: "This goes through relevance filtering, geolocation, and scoring
+        in real time — no queue, no batch job."
+
+STEP 2 — Show it land (15s)
+  Switch to /incidents (or wait ~10s for the live poll). A brand-new
+  incident appears.
+  Say: "The dashboard polls GET /incidents/updates every 10 seconds —
+        that's honest polling, not a fake websocket."
+  Click into it. Point out: 1 independent source, confidence is modest,
+  fresh_media_ratio isn't meaningful yet with just one report.
+
+STEP 3 — Submit citizen report #2 (30s)
+  Same event, different words, same general area (within ~2km), a
+  DIFFERENT photo, different name. Submit.
+
+STEP 4 — Watch it strengthen live (45s) — THIS IS THE MONEY SHOT
+  Refresh the incident detail page. Point at the Confidence & Evidence
+  panel:
+    - independent_sources: 1 -> 2
+    - unique_images: 1 -> 2
+    - fresh_media_ratio: 0% -> 100%   <-- dramatic, real, computed live
+    - confidence_score climbs, with the full breakdown visible
+      (source_score / geo_score / media_score / external_score)
+  Say: "Every one of these numbers is computed from the actual evidence
+        just submitted — nothing is pre-baked."
+
+STEP 5 — (Optional, if time) Show contradiction/misinformation (30s)
+  Submit a third report that explicitly denies the event ("actually it's
+  fine, no flooding, false alarm"). Refresh. Show:
+    - verification_status flips to CONTRADICTED
+    - the Contradiction Signals panel names which report IDs affirm vs.
+      deny
+    - the Misinformation Risk panel shows a risk level with named signals
+      and explicitly states this is a heuristic, never proof
+  Say: "We never hide a contradiction just because the score looked good
+        a moment ago — and we never claim to have proven anything false."
+
+STEP 6 — Responder workflow (15s)
+  Click Acknowledge -> Dispatch -> Resolve on any incident. Point out only
+  the single valid next action is ever shown, and the backend itself
+  rejects an out-of-order transition with a 409 if someone tries to force
+  it through the API directly.
+
+CLOSING LINE
+  "Everything you just watched — extraction, geolocation, dedup,
+   corroboration, contradiction, confidence, priority — ran live, on
+   real data you just gave it, with the actual scoring formulas, not a
+   scripted demo."
+
+
+6. IF SOMETHING GOES WRONG MID-DEMO
+--------------------------------------------------------------------------------
+- Blank/old-looking page: hard refresh (Cmd+Shift+R). Confirm you're on
+  localhost:5173, not localhost:8000/dashboard (a separate legacy static
+  page also exists on the backend, ignore it).
+- Backend not responding: check Terminal 1 didn't crash; restart with the
+  commands in section 4.
+- Photo upload fails: still submit without it — the report still goes
+  through the full pipeline, just without image evidence. Mention this is
+  by design (never lose a report because one attachment failed).
+- Image "AI analysis" shows "not analyzed": this is expected and correct
+  unless a vision-capable model is configured — see section 2's honest
+  scope limits. Don't apologize for it, explain it: it's honest
+  degradation, not a bug.
+
+
+7. TECHNICAL DEEP-DIVE (only if a judge asks to see code / architecture)
+--------------------------------------------------------------------------------
+Key API endpoints (all real, all live):
+  GET    /health
+  POST   /reports                       - submit a report, runs full pipeline
+  POST   /media                         - upload a real photo (multipart)
+  GET    /incidents?status=active|resolved|all
+  GET    /incidents/updates?since=<ISO8601>   - polling endpoint
+  GET    /incidents/{id}
+  GET    /incidents/{id}/evidence       - full evidence + confidence breakdown
+  GET    /map/incidents
+  POST   /incidents/{id}/acknowledge|dispatch|resolve
+  POST   /pipeline/run                  - re-run pipeline over all stored reports
+
+Confidence formula (app/scoring.py), fully documented and testable in
+isolation:
+    confidence = 0.30 * source_score
+                + 0.25 * geo_agreement
+                + 0.20 * fresh_media_ratio
+                + 0.25 * external_verification
+                - contradiction_penalty (45 pts if contradicted)
+    clamped to [0, 100]
+
+Action priority thresholds (deterministic, no ML):
+    severity >= 7 and confidence >= 70  -> CRITICAL_DISPATCH
+    severity >= 7 and confidence <  70  -> DEPLOY_SCOUT
+    severity <  7 and confidence >= 70  -> MONITOR
+    severity <  7 and confidence <  70  -> SUPPRESSED
+
+Test suite: 133 tests across unit, integration, and full-dataset pipeline
+tests (including an idempotency test — re-running the pipeline never
+creates duplicate incidents or loses responder state). Run with `pytest`.
+
+Database: SQLite, zero external infra. Idempotent, non-destructive schema
+migrations in app/db.py (adds new columns to an existing DB automatically,
+never drops data).
+================================================================================

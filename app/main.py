@@ -5,16 +5,21 @@ place extraction, geolocation, clustering, corroboration, and scoring are
 connected together (see that module's docstring for the stage diagram).
 """
 
+import io
+import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db, init_db
+from app.image_analysis import MAX_IMAGE_BYTES, SUPPORTED_EXTENSIONS
 from app.models import Incident, Media
 from app.pipeline import ingest_report, run_pipeline, set_responder_state
 from app.schemas import (
@@ -25,9 +30,12 @@ from app.schemas import (
     LinkedReportRead,
     MapIncidentRead,
     MediaRead,
+    MediaUploadRead,
     ReportCreate,
     ReportRead,
 )
+
+MEDIA_DIR = Path(__file__).resolve().parents[1] / "media"
 
 
 @asynccontextmanager
@@ -56,6 +64,48 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.post("/media", response_model=MediaUploadRead, tags=["media"])
+async def upload_media(file: UploadFile = File(...)):
+    """Save an uploaded image to disk and return a `media_url` for `POST /reports`.
+
+    This is what actually makes citizen-submitted photos hashable and
+    analyzable: without it, a report's `media_url` is just a filename the
+    backend can't read, and the media pipeline silently skips it. Applies
+    the same format/size/readability checks `app.image_analysis` uses
+    before ever touching a vision model.
+    """
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {suffix or 'unknown'}. "
+            f"Use one of: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+        )
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large (max {MAX_IMAGE_BYTES // (1024 * 1024)} MB)",
+        )
+
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail="File is not a readable image"
+        ) from exc
+
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"upload_{uuid.uuid4().hex[:16]}{suffix}"
+    (MEDIA_DIR / filename).write_bytes(data)
+
+    return MediaUploadRead(media_url=f"media/{filename}")
+
+
 @app.post("/reports", response_model=ReportRead)
 def create_report(payload: ReportCreate, db: Session = Depends(get_db)):
     """Persist a citizen report and run the full pipeline against it.
@@ -81,6 +131,28 @@ def list_incidents(
         query = query.where(Incident.responder_state == "RESOLVED")
     incidents = db.scalars(
         query.order_by(Incident.severity_score.desc(), Incident.id)
+    ).all()
+    return [IncidentRead.model_validate(incident) for incident in incidents]
+
+
+@app.get("/incidents/updates", response_model=list[IncidentRead])
+def incidents_updates(since: datetime, db: Session = Depends(get_db)):
+    """Poll for incidents changed since `since` (ISO 8601, e.g. `2026-09-11T12:00Z`).
+
+    A dependency-free alternative to a websocket/SSE stream for
+    this single-process demo: a client re-polls with the newest `updated_at`
+    it has already seen. `updated_at` is set on every pipeline (re)computation
+    of an incident and on every responder-state change, so this catches both
+    newly created incidents and re-scored or re-acknowledged existing ones.
+    Declared ahead of `/incidents/{id}` so the literal path wins the match.
+    """
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=UTC)
+    incidents = db.scalars(
+        select(Incident)
+        .where(Incident.updated_at.isnot(None))
+        .where(Incident.updated_at >= since)
+        .order_by(Incident.updated_at.desc())
     ).all()
     return [IncidentRead.model_validate(incident) for incident in incidents]
 

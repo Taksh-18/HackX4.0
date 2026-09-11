@@ -154,6 +154,8 @@ def _model_for_client(client) -> str:
     hostname = urlparse(str(getattr(client, "base_url", ""))).hostname
     if hostname == "api.groq.com":
         return "openai/gpt-oss-20b"
+    if hostname == "generativelanguage.googleapis.com":
+        return "gemini-2.0-flash"
     return "gpt-4o-mini"
 
 

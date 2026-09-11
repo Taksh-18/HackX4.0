@@ -44,6 +44,34 @@ def calculate_confidence(evidence: dict) -> float:
     return float(_clamp(score, 0.0, 100.0))
 
 
+def confidence_breakdown(evidence: dict) -> dict:
+    """Name the weighted components behind `calculate_confidence`'s output.
+
+    Purely additive and read-only: it recomputes the same weights that
+    function already applies (0.30 source / 0.25 geo / 0.20 media / 0.25
+    external, minus a 45-point contradiction penalty) so the API can show
+    *why* a score is what it is, without changing the formula itself.
+    `misinformation_penalty` is always 0.0 - misinformation risk is reported
+    separately (see app.misinformation) and does not currently reduce
+    confidence, keeping the two signals independently explainable.
+    """
+    sources = _source_score(evidence.get("independent_sources"))
+    geo = 100.0 * _clamp(_number(evidence.get("geo_agreement")), 0.0, 1.0)
+    media = 100.0 * _clamp(_number(evidence.get("fresh_media_ratio")), 0.0, 1.0)
+    hits = _clamp(_number(evidence.get("external_verification_hits")), 0.0, 3.0)
+    external = 100.0 * hits / 3.0
+    penalty = 45.0 if evidence.get("has_contradiction", False) is True else 0.0
+    return {
+        "source_score": round(sources, 2),
+        "geo_score": round(geo, 2),
+        "media_score": round(media, 2),
+        "external_score": round(external, 2),
+        "contradiction_penalty": round(penalty, 2),
+        "misinformation_penalty": 0.0,
+        "final_confidence": round(calculate_confidence(evidence), 2),
+    }
+
+
 def calculate_severity(extracted_facts: dict) -> float:
     """Return a 1–10 heuristic score based on this report's extracted claims."""
     # Weights:

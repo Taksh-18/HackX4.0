@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/*
+ * Exact port of Stitch project 6753037392963842589's tailwind config
+ * (design_md). Radii: DEFAULT 2px, lg 4px, xl 8px, full 12px — Stitch does
+ * NOT use full pill radii for chips (2px), only for a few round icon
+ * buttons (12px).
+ */
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-surface: #f9f9ff;
+  --color-surface-lowest: #ffffff;
+  --color-surface-low: #f0f3ff;
+  --color-surface-container: #e7eefe;
+  --color-surface-high: #e2e8f8;
+  --color-surface-highest: #dce2f3;
+  --color-on-surface: #151c27;
+  --color-on-surface-variant: #45464c;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #141b2b;
+  --color-secondary: #515f74;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  /* Operational status matrix (exact Stitch spec) */
+  --color-status-critical: #b91c1c;
+  --color-status-critical-solid: #dc2626;
+  --color-status-critical-bg: #fef2f2;
+  --color-status-critical-border: #fca5a5;
+
+  --color-status-amber: #b45309;
+  --color-status-amber-solid: #d97706;
+  --color-status-amber-bg: #fffbeb;
+  --color-status-amber-border: #fcd34d;
+
+  --color-status-slate: #334155;
+  --color-status-slate-solid: #475569;
+  --color-status-slate-bg: #f1f5f9;
+  --color-status-slate-border: #94a3b8;
+
+  --color-status-green: #15803d;
+  --color-status-green-solid: #16a34a;
+  --color-status-green-bg: #f0fdf4;
+  --color-status-green-border: #86efac;
+
+  --color-status-gray: #4b5563;
+  --color-status-gray-solid: #9ca3af;
+  --color-status-gray-bg: #f3f4f6;
+  --color-status-gray-border: #d1d5db;
+
+  /* Kept for a couple of existing components; aliases onto the Stitch tokens. */
+  --color-canvas: #f9f9ff;
+  --color-canvas-alt: #e7eefe;
+  --color-ink: #151c27;
+  --color-ink-muted: #45464c;
+  --color-ink-faint: #76777d;
+  --color-ink-label: #45464c;
+  --color-border: #c6c6cd;
+  --color-border-subtle: #e7eefe;
+  --color-border-strong: #151c27;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-on-surface);
+  outline-offset: 2px;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Material Symbols Outlined — same icon font Stitch itself uses. */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+/* Leaflet base — muted operational map, no default marker glow/shadow */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #eef0ee;
+}
