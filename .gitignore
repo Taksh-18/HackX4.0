@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local configuration
+.env
+
+# Runtime data
+*.db
+*.db-*
+data/*.db
+data/*.db-*
+*.sqlite
+*.sqlite3
+
+# Accidental URL-shaped local directories
+https:/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
