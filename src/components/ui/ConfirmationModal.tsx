@@ -10,6 +10,7 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   variant?: 'default' | 'danger';
+  busy?: boolean;
 }
 
 export function ConfirmationModal({
@@ -21,6 +22,7 @@ export function ConfirmationModal({
   onConfirm,
   onCancel,
   variant = 'default',
+  busy = false,
 }: Props) {
   if (!isOpen) return null;
 
@@ -33,7 +35,7 @@ export function ConfirmationModal({
     >
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onCancel}
+        onClick={() => !busy && onCancel()}
         aria-hidden
       />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm animate-slide-in-up">
@@ -59,6 +61,7 @@ export function ConfirmationModal({
             </div>
             <button
               onClick={onCancel}
+              disabled={busy}
               className="text-slate-400 hover:text-slate-600 transition-colors"
               aria-label="Close dialog"
             >
@@ -69,20 +72,22 @@ export function ConfirmationModal({
         <div className="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">
           <button
             onClick={onCancel}
+            disabled={busy}
             className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
+            disabled={busy}
             className={cn(
-              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-60',
               variant === 'danger'
                 ? 'bg-red-600 text-white hover:bg-red-700'
                 : 'bg-slate-900 text-white hover:bg-slate-800'
             )}
           >
-            {confirmLabel}
+            {busy ? 'Updating…' : confirmLabel}
           </button>
         </div>
       </div>

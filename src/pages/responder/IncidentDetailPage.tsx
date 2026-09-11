@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Clock, FileText, Users, Image,
-  CheckCircle, Truck, Eye, XCircle, AlertTriangle
+  CheckCircle, Truck, XCircle, AlertTriangle
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { SeverityBadge } from '../../components/ui/SeverityBadge';
@@ -13,6 +13,7 @@ import { IncidentTimeline } from '../../components/incident/IncidentTimeline';
 import { EvidencePanel } from '../../components/incident/EvidencePanel';
 import { MapView } from '../../components/map/MapView';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { useIncidents } from '../../context/IncidentContext';
 import { incidentTypeIcon, incidentTypeLabel } from '../../lib/incidentHelpers';
 import { cn } from '../../lib/cn';
@@ -28,20 +29,26 @@ const RESPONDER_STATE_CONFIG: Record<
   resolved: { label: 'RESOLVED', className: 'text-green-700 bg-green-50' },
 };
 
-type Modal = 'acknowledge' | 'dispatch' | 'scout' | 'resolve' | null;
+type Modal = 'acknowledge' | 'dispatch' | 'resolve' | null;
 
 export function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { incidents, updateResponderState } = useIncidents();
+  const { incidents, updateResponderState, loading, error } = useIncidents();
   const [modal, setModal] = useState<Modal>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const incident = incidents.find(i => i.id === id);
+
+  if (loading && !incident) {
+    return <div className="p-6"><LoadingState /></div>;
+  }
 
   if (!incident) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-slate-500 mb-4">Incident not found.</p>
+          <p className="text-slate-500 mb-4">{error || 'Incident not found.'}</p>
           <Link to="/responder/feed" className="text-sm text-blue-600 hover:underline">
             Back to feed
           </Link>
@@ -54,10 +61,15 @@ export function IncidentDetailPage() {
   const stateConf = RESPONDER_STATE_CONFIG[incident.responderState];
 
   const handleAction = async (state: ResponderState) => {
+    setActionPending(true);
+    setActionError(null);
     try {
       await updateResponderState(incident.id, state);
-    } finally {
       setModal(null);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not update the incident.');
+    } finally {
+      setActionPending(false);
     }
   };
 
@@ -106,6 +118,7 @@ export function IncidentDetailPage() {
               {incident.responderState === 'unacknowledged' && (
                 <button
                   onClick={() => setModal('acknowledge')}
+                  disabled={actionPending}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <CheckCircle size={14} aria-hidden /> Acknowledge
@@ -114,22 +127,18 @@ export function IncidentDetailPage() {
               {(incident.responderState === 'acknowledged') && (
                 <>
                   <button
-                    onClick={() => setModal('dispatch')}
+                  onClick={() => setModal('dispatch')}
+                    disabled={actionPending}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
                   >
                     <Truck size={14} aria-hidden /> Dispatch
-                  </button>
-                  <button
-                    onClick={() => setModal('scout')}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors"
-                  >
-                    <Eye size={14} aria-hidden /> Deploy Scout
                   </button>
                 </>
               )}
               {incident.responderState !== 'resolved' && (
                 <button
                   onClick={() => setModal('resolve')}
+                  disabled={actionPending}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors"
                 >
                   <XCircle size={14} aria-hidden /> Mark Resolved
@@ -137,6 +146,9 @@ export function IncidentDetailPage() {
               )}
             </div>
           </div>
+          {actionError && (
+            <p className="mt-3 text-sm text-red-700" role="alert">{actionError}</p>
+          )}
 
           <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
@@ -288,6 +300,7 @@ export function IncidentDetailPage() {
         confirmLabel="Acknowledge"
         onConfirm={() => handleAction('acknowledged')}
         onCancel={() => setModal(null)}
+        busy={actionPending}
       />
       <ConfirmationModal
         isOpen={modal === 'dispatch'}
@@ -297,14 +310,7 @@ export function IncidentDetailPage() {
         onConfirm={() => handleAction('dispatched')}
         onCancel={() => setModal(null)}
         variant="default"
-      />
-      <ConfirmationModal
-        isOpen={modal === 'scout'}
-        title="Deploy scout?"
-        message="Deploy a scout team for visual assessment before full dispatch?"
-        confirmLabel="Deploy Scout"
-        onConfirm={() => handleAction('dispatched')}
-        onCancel={() => setModal(null)}
+        busy={actionPending}
       />
       <ConfirmationModal
         isOpen={modal === 'resolve'}
@@ -314,6 +320,7 @@ export function IncidentDetailPage() {
         onConfirm={() => handleAction('resolved')}
         onCancel={() => setModal(null)}
         variant="danger"
+        busy={actionPending}
       />
     </>
   );

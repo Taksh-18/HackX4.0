@@ -68,14 +68,14 @@ export function ResponderMapPage() {
           onIncidentSelect={setSelectedId}
         />
 
-        {/* Legend */}
+        {/* CHANGED: marker legend now describes action priority, not severity. */}
         <div className="absolute bottom-6 left-4 bg-white border border-slate-200 rounded-xl shadow-panel px-4 py-3 text-xs space-y-2 pointer-events-none">
-          <p className="font-semibold text-slate-700">Severity</p>
+          <p className="font-semibold text-slate-700">Action Priority</p>
           {[
-            { label: 'Critical', color: 'bg-red-500' },
-            { label: 'High', color: 'bg-orange-500' },
-            { label: 'Moderate', color: 'bg-yellow-500' },
-            { label: 'Low', color: 'bg-green-500' },
+            { label: 'Critical Dispatch', color: 'bg-red-500' },
+            { label: 'Deploy Scout', color: 'bg-orange-500' },
+            { label: 'Monitor', color: 'bg-slate-500' },
+            { label: 'Suppressed', color: 'bg-slate-400' },
           ].map(({ label, color }) => (
             <div key={label} className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${color}`} aria-hidden />

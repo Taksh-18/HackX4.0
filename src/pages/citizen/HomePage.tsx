@@ -12,7 +12,7 @@ import { incidentTypeIcon } from '../../lib/incidentHelpers';
 const USER_LOCATION = { lat: 28.6140, lng: 77.2300 };
 
 export function HomePage() {
-  const { incidents } = useIncidents();
+  const { incidents, error } = useIncidents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const nearbyIncidents = incidents
@@ -24,6 +24,14 @@ export function HomePage() {
   return (
     <div className="min-h-screen bg-surface-1">
       <Navbar />
+
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+            <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" aria-hidden /> {error}
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <section className="bg-white border-b border-slate-200">

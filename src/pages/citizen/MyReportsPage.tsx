@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Clock, MapPin, Image, ArrowRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Navbar } from '../../components/layout/Navbar';
-import { mockApi } from '../../services/mockApi';
+import { api } from '../../services/api';
 import type { Report } from '../../data/types';
 import { incidentTypeIcon } from '../../lib/incidentHelpers';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -25,12 +25,13 @@ const STATUS_CONFIG: Record<
 export function MyReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    mockApi.getMyReports().then(data => {
-      setReports(data);
-      setLoading(false);
-    });
+    api.getMyReports()
+      .then(setReports)
+      .catch(cause => setError(cause instanceof Error ? cause.message : 'Could not load your reports.'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -44,6 +45,8 @@ export function MyReportsPage() {
 
         {loading ? (
           <LoadingState />
+        ) : error ? (
+          <EmptyState title="Reports unavailable" description={error} />
         ) : reports.length === 0 ? (
           <EmptyState
             title="No reports yet"

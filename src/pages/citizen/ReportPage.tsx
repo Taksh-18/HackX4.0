@@ -1,10 +1,10 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MapPin, ChevronRight, ChevronLeft, CheckCircle2, Upload, X, AlertCircle
 } from 'lucide-react';
 import { Navbar } from '../../components/layout/Navbar';
-import { mockApi } from '../../services/mockApi';
+import { api } from '../../services/api';
 import type { IncidentType } from '../../data/types';
 import { cn } from '../../lib/cn';
 
@@ -22,7 +22,8 @@ interface FormData {
   type: IncidentType | null;
   description: string;
   locationName: string;
-  mediaFiles: { url: string; name: string }[];
+  mediaFiles: { url: string; name: string; file: File }[];
+  location: { lat: number; lng: number } | null;
   peopleTrapped: string;
   injuries: string;
   medicalNeeded: boolean;
@@ -35,53 +36,103 @@ export function ReportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<{ id: string; referenceCode: string } | null>(null);
   const [form, setForm] = useState<FormData>({
     type: null,
     description: '',
-    locationName: 'Central District (auto-detected)',
+    locationName: '',
     mediaFiles: [],
+    location: null,
     peopleTrapped: '',
     injuries: '',
     medicalNeeded: false,
   });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    const previews = files.map(f => ({
-      url: URL.createObjectURL(f),
-      name: f.name,
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setFormError('Choose a JPEG, PNG, or WebP image.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError('The image must be 10 MB or smaller.');
+      e.target.value = '';
+      return;
+    }
+    setFormError(null);
+    setForm(prev => ({
+      ...prev,
+      mediaFiles: [{ url: URL.createObjectURL(file), name: file.name, file }],
     }));
-    setForm(prev => ({ ...prev, mediaFiles: [...prev.mediaFiles, ...previews] }));
   };
 
   const removeMedia = (idx: number) => {
+    URL.revokeObjectURL(form.mediaFiles[idx].url);
     setForm(prev => ({
       ...prev,
       mediaFiles: prev.mediaFiles.filter((_, i) => i !== idx),
     }));
   };
 
+  useEffect(() => () => {
+    form.mediaFiles.forEach(item => URL.revokeObjectURL(item.url));
+  }, [form.mediaFiles]);
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      setFormError('Location detection is unavailable. Enter a landmark instead.');
+      return;
+    }
+    setLocating(true);
+    setFormError(null);
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const location = {
+          lat: Number(position.coords.latitude.toFixed(6)),
+          lng: Number(position.coords.longitude.toFixed(6)),
+        };
+        setForm(prev => ({ ...prev, location }));
+        setLocating(false);
+      },
+      () => {
+        setFormError('Could not detect your location. Enter a landmark instead.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   const canNext = () => {
     if (step === 0) return form.type !== null;
+    if (step === 1) return form.location !== null || form.locationName.trim().length > 0;
     if (step === 2) return form.description.trim().length > 0;
+    if (step === 3 && form.peopleTrapped) {
+      const count = Number(form.peopleTrapped);
+      return Number.isSafeInteger(count) && count >= 0;
+    }
     return true;
   };
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setFormError(null);
     try {
-      const result = await mockApi.submitReport({
-        incidentId: null,
+      const result = await api.submitReport({
         type: form.type!,
-        title: `${INCIDENT_TYPES.find(t => t.value === form.type)?.label} report`,
         description: form.description,
-        location: { lat: 28.614, lng: 77.23 },
+        location: form.location,
         locationName: form.locationName,
-        media: [],
-        sourceType: 'citizen',
+        image: form.mediaFiles[0]?.file ?? null,
+        peopleTrapped: form.peopleTrapped ? Number(form.peopleTrapped) : null,
+        medicalNeeded: form.medicalNeeded,
       });
       setSubmitted(result);
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Could not submit the report.');
     } finally {
       setSubmitting(false);
     }
@@ -98,7 +149,7 @@ export function ReportPage() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Report submitted</h1>
           <p className="text-slate-500 mb-2">
-            Your report is being analyzed and may be combined with other reports from the area.
+            Your report was saved and is being analyzed for nearby incident matches.
           </p>
           <div className="mt-4 inline-flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-lg">
             <span className="text-xs text-slate-500">Reference:</span>
@@ -115,7 +166,7 @@ export function ReportPage() {
               View My Reports
             </button>
             <button
-              onClick={() => { setSubmitted(null); setStep(0); setForm({ type: null, description: '', locationName: 'Central District (auto-detected)', mediaFiles: [], peopleTrapped: '', injuries: '', medicalNeeded: false }); }}
+              onClick={() => { setSubmitted(null); setStep(0); setForm({ type: null, description: '', locationName: '', mediaFiles: [], location: null, peopleTrapped: '', injuries: '', medicalNeeded: false }); }}
               className="px-5 py-2.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
             >
               Submit Another
@@ -183,11 +234,25 @@ export function ReportPage() {
           {step === 1 && (
             <div>
               <h2 className="text-base font-semibold text-slate-800 mb-4">Where did it happen?</h2>
-              <div className="bg-slate-100 rounded-xl h-40 flex items-center justify-center mb-4 border border-slate-200">
+              <div className="bg-slate-100 rounded-xl min-h-40 flex items-center justify-center mb-4 border border-slate-200 p-5">
                 <div className="text-center">
                   <MapPin size={24} className="text-blue-600 mx-auto mb-2" aria-hidden />
-                  <p className="text-sm font-medium text-slate-700">Location detected</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Central District, 28.6140°N, 77.2300°E</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    {form.location ? 'Location detected' : 'Add a precise location (optional)'}
+                  </p>
+                  {form.location && (
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {form.location.lat}°N, {form.location.lng}°E
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={detectLocation}
+                    disabled={locating}
+                    className="mt-3 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {locating ? 'Detecting…' : form.location ? 'Refresh location' : 'Use current location'}
+                  </button>
                 </div>
               </div>
               <div>
@@ -233,8 +298,7 @@ export function ReportPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                multiple
-                accept="image/*,video/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={handleFileChange}
                 aria-label="Upload media"
@@ -245,8 +309,8 @@ export function ReportPage() {
               >
                 <Upload size={24} className="text-slate-400" aria-hidden />
                 <div className="text-center">
-                  <p className="text-sm font-medium text-slate-600">Upload photos or videos</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Click or tap to browse</p>
+                  <p className="text-sm font-medium text-slate-600">Upload one photo</p>
+                  <p className="text-xs text-slate-400 mt-0.5">JPEG, PNG or WebP · up to 10 MB</p>
                 </div>
               </button>
 
@@ -317,7 +381,9 @@ export function ReportPage() {
                 </div>
                 <div className="flex gap-3">
                   <span className="text-sm text-slate-500 w-24 flex-shrink-0">Location</span>
-                  <span className="text-sm font-medium text-slate-800">{form.locationName}</span>
+                  <span className="text-sm font-medium text-slate-800">
+                    {form.locationName || (form.location ? `${form.location.lat}, ${form.location.lng}` : 'Not provided')}
+                  </span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-sm text-slate-500 w-24 flex-shrink-0">Description</span>
@@ -331,6 +397,18 @@ export function ReportPage() {
                     </span>
                   </div>
                 )}
+                {form.peopleTrapped && (
+                  <div className="flex gap-3">
+                    <span className="text-sm text-slate-500 w-24 flex-shrink-0">At risk</span>
+                    <span className="text-sm font-medium text-slate-800">{form.peopleTrapped} people</span>
+                  </div>
+                )}
+                {form.medicalNeeded && (
+                  <div className="flex gap-3">
+                    <span className="text-sm text-slate-500 w-24 flex-shrink-0">Medical</span>
+                    <span className="text-sm font-medium text-red-700">Assistance appears needed</span>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-6 border-t border-slate-100 pt-4">
                 Your report will be anonymized, analyzed, and may be combined with other nearby reports. You can track its status in My Reports.
@@ -339,11 +417,18 @@ export function ReportPage() {
           )}
         </div>
 
+        {formError && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+            <AlertCircle size={15} className="mt-0.5 flex-shrink-0" aria-hidden /> {formError}
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="mt-4 flex justify-between gap-3">
           {step > 0 ? (
             <button
               onClick={() => setStep(s => s - 1)}
+              disabled={submitting}
               className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <ChevronLeft size={16} aria-hidden /> Back
@@ -355,7 +440,7 @@ export function ReportPage() {
           {step < STEPS.length - 1 ? (
             <button
               onClick={() => setStep(s => s + 1)}
-              disabled={!canNext()}
+              disabled={!canNext() || submitting}
               className={cn(
                 'flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors',
                 canNext()

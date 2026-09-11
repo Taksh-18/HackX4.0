@@ -6,20 +6,36 @@ import { MapView } from '../../components/map/MapView';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { SeverityBadge } from '../../components/ui/SeverityBadge';
 import { IncidentTimeline } from '../../components/incident/IncidentTimeline';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { useIncidents } from '../../context/IncidentContext';
 import { incidentTypeIcon, incidentTypeLabel } from '../../lib/incidentHelpers';
 
 export function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { incidents } = useIncidents();
-  const incident = incidents.find(i => i.id === id);
+  const { incidents, loading, error } = useIncidents();
+  // CHANGED: match the citizen map/feed visibility rules on direct URLs too.
+  const incident = incidents.find(
+    i =>
+      i.id === id &&
+      i.verificationState !== 'contradicted' &&
+      i.responderState !== 'resolved'
+  );
+
+  if (loading && !incident) {
+    return (
+      <div className="min-h-screen bg-surface-1">
+        <Navbar />
+        <div className="max-w-2xl mx-auto px-4 py-16"><LoadingState /></div>
+      </div>
+    );
+  }
 
   if (!incident) {
     return (
       <div className="min-h-screen bg-surface-1">
         <Navbar />
         <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-          <p className="text-slate-500">Incident not found.</p>
+          <p className="text-slate-500">{error || 'Incident not found.'}</p>
           <Link to="/" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
             Return home
           </Link>

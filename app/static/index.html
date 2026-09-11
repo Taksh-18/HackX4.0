@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CDIS Responder Dashboard</title>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+<style>
+  :root {
+    --bg: #0f1720;
+    --panel: #161f2b;
+    --panel-2: #1c2735;
+    --border: #263344;
+    --text: #e6edf5;
+    --muted: #8b9bb0;
+    --accent: #3b82f6;
+    --crit: #ef4444;
+    --scout: #f59e0b;
+    --monitor: #3b82f6;
+    --suppressed: #4b5563;
+    --good: #22c55e;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+  }
+  header {
+    grid-column: 1 / 3;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  header .status-msg { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 6px; margin-left: auto; }
+  .tabs button {
+    background: var(--panel-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .tabs button.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  #feed {
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+  #feed .empty { padding: 24px; color: var(--muted); text-align: center; }
+  .card {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .card:hover { background: var(--panel-2); }
+  .card.selected { background: var(--panel-2); border-left: 3px solid var(--accent); }
+  .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card-id { color: var(--muted); font-size: 11px; }
+  .card-title { font-size: 13.5px; font-weight: 600; margin: 4px 0 8px; line-height: 1.3; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .badge {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .badge.priority-CRITICAL_DISPATCH { background: var(--crit); color: white; border-color: var(--crit); }
+  .badge.priority-DEPLOY_SCOUT { background: var(--scout); color: #1a1200; border-color: var(--scout); }
+  .badge.priority-MONITOR { background: var(--monitor); color: white; border-color: var(--monitor); }
+  .badge.priority-SUPPRESSED { background: var(--suppressed); color: white; border-color: var(--suppressed); }
+  .metrics { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .metrics b { color: var(--text); }
+  .actions { display: flex; gap: 6px; }
+  .actions button {
+    flex: 1;
+    font-size: 11px;
+    padding: 5px 6px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .actions button:disabled { opacity: 0.35; cursor: default; }
+  .actions button:not(:disabled):hover { border-color: var(--accent); }
+
+  #map { position: relative; }
+  #leaflet-map { width: 100%; height: 100%; }
+
+  #drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 380px;
+    max-width: 90vw;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.18s ease;
+    overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.4);
+    z-index: 1000;
+  }
+  #drawer.open { transform: translateX(0); }
+  #drawer .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+  }
+  #drawer .drawer-head h2 { font-size: 14px; margin: 0 0 4px; }
+  #drawer .close-btn {
+    background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer;
+  }
+  #drawer section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  #drawer h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); margin: 0 0 10px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: var(--panel-2); border-radius: 6px; padding: 8px; }
+  .stat .v { font-size: 16px; font-weight: 700; }
+  .stat .l { font-size: 10.5px; color: var(--muted); }
+  .flag { display: inline-block; margin-top: 8px; padding: 3px 8px; border-radius: 5px; font-size: 11px; }
+  .flag.bad { background: rgba(239,68,68,0.15); color: var(--bad); }
+  .flag.good { background: rgba(34,197,94,0.15); color: var(--good); }
+  .timeline { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
+  .timeline li { position: relative; padding: 0 0 14px 16px; }
+  .timeline li::before {
+    content: ""; position: absolute; left: -5px; top: 3px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  }
+  .timeline .t-time { font-size: 10.5px; color: var(--muted); }
+  .timeline .t-event { font-size: 12.5px; }
+  .report-item { padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  .report-item:last-child { border-bottom: none; }
+  .report-item .meta { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .media-item { font-size: 11px; color: var(--muted); font-family: monospace; padding: 3px 0; }
+  #drawer .actions { padding: 14px 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="dot" id="live-dot"></span>
+    <h1>CDIS Responder Dashboard</h1>
+    <span class="status-msg" id="status-msg"></span>
+    <div class="tabs" id="status-tabs">
+      <button data-status="active" class="active">Active</button>
+      <button data-status="resolved">Resolved</button>
+      <button data-status="all">All</button>
+    </div>
+  </header>
+
+  <div id="feed"></div>
+
+  <div id="map">
+    <div id="leaflet-map"></div>
+    <div id="drawer">
+      <div class="drawer-head">
+        <div>
+          <h2 id="drawer-title">Select an incident</h2>
+          <span class="badge" id="drawer-priority"></span>
+        </div>
+        <button class="close-btn" id="drawer-close">&times;</button>
+      </div>
+      <section>
+        <h3>Evidence</h3>
+        <div class="stat-grid" id="evidence-stats"></div>
+        <span id="contradiction-flag"></span>
+      </section>
+      <section>
+        <h3>Timeline</h3>
+        <ul class="timeline" id="timeline"></ul>
+      </section>
+      <section>
+        <h3>Linked reports</h3>
+        <div id="reports-list"></div>
+      </section>
+      <section>
+        <h3>Media</h3>
+        <div id="media-list"></div>
+      </section>
+      <div class="actions" id="drawer-actions"></div>
+    </div>
+  </div>
+</div>
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+<script>
+const API = "";
+const REFRESH_MS = 8000;
+const RESPONDER_ORDER = ["UNACKNOWLEDGED", "ACKNOWLEDGED", "DISPATCHED", "RESOLVED"];
+const ACTION_LABELS = { ACKNOWLEDGED: "Acknowledge", DISPATCHED: "Dispatch", RESOLVED: "Resolve" };
+const ACTION_ROUTES = { ACKNOWLEDGED: "acknowledge", DISPATCHED: "dispatch", RESOLVED: "resolve" };
+
+let currentStatus = "active";
+let incidents = [];
+let selectedId = null;
+let markers = {};
+
+const map = L.map("leaflet-map", { zoomControl: true }).setView([28.6084, 77.2951], 14);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: "&copy; OpenStreetMap contributors",
+}).addTo(map);
+
+const priorityColor = {
+  CRITICAL_DISPATCH: "#ef4444",
+  DEPLOY_SCOUT: "#f59e0b",
+  MONITOR: "#3b82f6",
+  SUPPRESSED: "#4b5563",
+};
+
+function setStatusMsg(text, isError) {
+  const el = document.getElementById("status-msg");
+  el.textContent = text;
+  document.getElementById("live-dot").style.background = isError ? "#ef4444" : "#22c55e";
+}
+
+async function api(path, options) {
+  const response = await fetch(API + path, options);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `${response.status} ${response.statusText}`);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function fmtTime(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function renderFeed() {
+  const feed = document.getElementById("feed");
+  if (!incidents.length) {
+    feed.innerHTML = `<div class="empty">No ${currentStatus} incidents.</div>`;
+    return;
+  }
+  feed.innerHTML = incidents.map(cardHtml).join("");
+  feed.querySelectorAll(".card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      selectIncident(card.dataset.id);
+    });
+  });
+  feed.querySelectorAll(".actions button").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      runAction(btn.dataset.id, btn.dataset.action);
+    });
+  });
+}
+
+function actionButtonsHtml(incident, idPrefix) {
+  const state = incident.responder_state;
+  const stateIndex = RESPONDER_ORDER.indexOf(state);
+  return ["ACKNOWLEDGED", "DISPATCHED", "RESOLVED"]
+    .map((target) => {
+      const targetIndex = RESPONDER_ORDER.indexOf(target);
+      const disabled = targetIndex <= stateIndex ? "disabled" : "";
+      return `<button data-id="${incident.id}" data-action="${target}" ${disabled}>${ACTION_LABELS[target]}</button>`;
+    })
+    .join("");
+}
+
+function cardHtml(incident) {
+  const selected = incident.id === selectedId ? "selected" : "";
+  return `
+    <div class="card ${selected}" data-id="${incident.id}">
+      <div class="card-top">
+        <span class="card-id">${incident.id} &middot; ${incident.event_type}</span>
+        <span class="card-id">${incident.responder_state}</span>
+      </div>
+      <div class="card-title">${incident.title}</div>
+      <div class="badges">
+        <span class="badge priority-${incident.action_priority}">${incident.action_priority.replace("_", " ")}</span>
+        <span class="badge">${incident.verification_status}</span>
+      </div>
+      <div class="metrics">
+        <span>Severity <b>${incident.severity_score.toFixed(1)}</b></span>
+        <span>Confidence <b>${incident.confidence_score.toFixed(0)}%</b></span>
+        <span>Trapped <b>${incident.aggregated_needs_json.estimated_trapped_total}</b></span>
+      </div>
+      <div class="actions">${actionButtonsHtml(incident, "feed")}</div>
+    </div>`;
+}
+
+function renderMap() {
+  Object.values(markers).forEach((m) => map.removeLayer(m));
+  markers = {};
+  const bounds = [];
+  incidents.forEach((incident) => {
+    const marker = L.circleMarker([incident.center_lat, incident.center_lon], {
+      radius: 10,
+      color: priorityColor[incident.action_priority] || "#3b82f6",
+      fillColor: priorityColor[incident.action_priority] || "#3b82f6",
+      fillOpacity: 0.7,
+      weight: 2,
+    }).addTo(map);
+    marker.bindTooltip(`${incident.id}: ${incident.title}`);
+    marker.on("click", () => selectIncident(incident.id));
+    markers[incident.id] = marker;
+    bounds.push([incident.center_lat, incident.center_lon]);
+  });
+  if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+}
+
+async function loadIncidents() {
+  try {
+    incidents = await api(`/incidents?status=${currentStatus}`);
+    setStatusMsg(`${incidents.length} ${currentStatus} incident(s) &middot; updated ${new Date().toLocaleTimeString()}`.replace("&middot;", "·"));
+    renderFeed();
+    renderMap();
+    if (selectedId && incidents.some((i) => i.id === selectedId)) {
+      renderDrawerTimelineFrom(incidents.find((i) => i.id === selectedId));
+    } else if (selectedId) {
+      closeDrawer();
+    }
+  } catch (err) {
+    setStatusMsg(`Failed to load incidents: ${err.message}`, true);
+  }
+}
+
+function renderDrawerTimelineFrom(incident) {
+  document.getElementById("drawer-title").textContent = `${incident.id}: ${incident.title}`;
+  const badge = document.getElementById("drawer-priority");
+  badge.textContent = incident.action_priority.replace("_", " ");
+  badge.className = `badge priority-${incident.action_priority}`;
+  document.getElementById("timeline").innerHTML = (incident.timeline_json || [])
+    .map(
+      (entry) => `<li><div class="t-time">${fmtTime(entry.time)}</div><div class="t-event">${entry.event}</div></li>`
+    )
+    .join("") || "<li>No timeline entries yet.</li>";
+  document.getElementById("drawer-actions").innerHTML = actionButtonsHtml(incident);
+  document.getElementById("drawer-actions").querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => runAction(btn.dataset.id, btn.dataset.action));
+  });
+}
+
+async function selectIncident(id) {
+  selectedId = id;
+  renderFeed();
+  document.getElementById("drawer").classList.add("open");
+  const incident = incidents.find((i) => i.id === id);
+  if (incident) renderDrawerTimelineFrom(incident);
+
+  try {
+    const evidence = await api(`/incidents/${id}/evidence`);
+    renderEvidence(evidence);
+  } catch (err) {
+    document.getElementById("evidence-stats").innerHTML = `<div class="stat">Failed to load evidence: ${err.message}</div>`;
+  }
+}
+
+function statHtml(label, value) {
+  return `<div class="stat"><div class="v">${value}</div><div class="l">${label}</div></div>`;
+}
+
+function renderEvidence(evidence) {
+  const ev = evidence.evidence_json;
+  document.getElementById("evidence-stats").innerHTML = [
+    statHtml("Total reports", ev.total_reports),
+    statHtml("Independent sources", ev.independent_sources),
+    statHtml("Unique images", ev.unique_images),
+    statHtml("Recycled media", ev.recycled_media_detected),
+    statHtml("Geo agreement", `${Math.round(ev.geo_agreement * 100)}%`),
+    statHtml("External hits", ev.external_verification_hits ?? "n/a"),
+  ].join("");
+  document.getElementById("contradiction-flag").innerHTML = ev.has_contradiction
+    ? `<span class="flag bad">Contradicting report detected</span>`
+    : `<span class="flag good">No contradiction detected</span>`;
+
+  document.getElementById("reports-list").innerHTML = evidence.reports.length
+    ? evidence.reports
+        .map(
+          (link) => `
+      <div class="report-item">
+        <div>${link.report.extracted_json.claim || link.report.raw_text}</div>
+        <div class="meta">${link.report.source_user} &middot; ${fmtTime(link.report.timestamp)} &middot; ${Math.round(link.distance_m)}m from centroid</div>
+      </div>`
+        )
+        .join("")
+    : "<div class='meta'>No linked reports.</div>";
+
+  document.getElementById("media-list").innerHTML = evidence.media.length
+    ? evidence.media
+        .map(
+          (m) => `<div class="media-item">${m.report_id}: ${m.phash}${m.is_duplicate_of ? " (duplicate of " + m.is_duplicate_of + ")" : ""}</div>`
+        )
+        .join("")
+    : "<div class='meta'>No media on record.</div>";
+}
+
+function closeDrawer() {
+  selectedId = null;
+  document.getElementById("drawer").classList.remove("open");
+  renderFeed();
+}
+
+async function runAction(id, target) {
+  try {
+    await api(`/incidents/${id}/${ACTION_ROUTES[target]}`, { method: "POST" });
+    await loadIncidents();
+    if (selectedId === id) selectIncident(id);
+  } catch (err) {
+    setStatusMsg(`Action failed: ${err.message}`, true);
+  }
+}
+
+document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+document.getElementById("status-tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  currentStatus = btn.dataset.status;
+  document.querySelectorAll("#status-tabs button").forEach((b) => b.classList.toggle("active", b === btn));
+  closeDrawer();
+  loadIncidents();
+});
+
+loadIncidents();
+setInterval(loadIncidents, REFRESH_MS);
+</script>
+</body>
+</html>

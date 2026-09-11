@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Clock, MapPin, Image, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { FilterBar } from '../../components/ui/FilterBar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { mockApi } from '../../services/mockApi';
+import { api } from '../../services/api';
 import type { Report } from '../../data/types';
 import { incidentTypeIcon, incidentTypeLabel } from '../../lib/incidentHelpers';
 import { cn } from '../../lib/cn';
@@ -32,13 +33,14 @@ const STATUS_BADGE: Record<
 export function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(['all']);
 
   useEffect(() => {
-    mockApi.getReports().then(data => {
-      setReports(data);
-      setLoading(false);
-    });
+    api.getReports()
+      .then(setReports)
+      .catch(cause => setError(cause instanceof Error ? cause.message : 'Could not load reports.'))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = reports.filter(r => {
@@ -67,6 +69,8 @@ export function ReportsPage() {
       <div className="flex-1 overflow-y-auto p-6">
         {loading ? (
           <LoadingState />
+        ) : error ? (
+          <EmptyState title="Reports unavailable" description={error} />
         ) : filtered.length === 0 ? (
           <EmptyState title="No reports" description="No reports match the current filter." />
         ) : (
@@ -133,12 +137,12 @@ export function ReportsPage() {
                           </span>
                         )}
                         {report.incidentId && (
-                          <a
-                            href={`/responder/incidents/${report.incidentId}`}
+                          <Link
+                            to={`/responder/incidents/${report.incidentId}`}
                             className="flex items-center gap-1 text-blue-600 hover:underline"
                           >
                             <ExternalLink size={10} aria-hidden /> View incident
-                          </a>
+                          </Link>
                         )}
                       </div>
                     </div>

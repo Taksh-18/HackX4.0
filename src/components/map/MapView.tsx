@@ -19,16 +19,39 @@ const SEVERITY_COLORS: Record<string, { fill: string; stroke: string }> = {
   low: { fill: '#16A34A', stroke: '#14532D' },
 };
 
+// CHANGED: responder pins encode action priority, matching the priority feed.
+const PRIORITY_COLORS: Record<string, { fill: string; stroke: string }> = {
+  critical_dispatch: { fill: '#DC2626', stroke: '#991B1B' },
+  deploy_scout: { fill: '#EA580C', stroke: '#9A3412' },
+  monitor: { fill: '#64748B', stroke: '#334155' },
+  suppressed: { fill: '#94A3B8', stroke: '#64748B' },
+};
+
 const VERIFICATION_OPACITY: Record<string, number> = {
   corroborated: 0.18,
   developing: 0.12,
   contradicted: 0.08,
 };
 
-function createIncidentIcon(severity: string, state: string) {
-  const colors = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.low;
-  const isResolved = state === 'resolved';
-  const size = severity === 'critical' ? 18 : severity === 'high' ? 15 : 12;
+function createIncidentIcon(incident: Incident, isResponder: boolean) {
+  // CHANGED: responders see operational priority; citizens retain severity cues.
+  const colors = isResponder
+    ? (PRIORITY_COLORS[incident.actionPriority] ?? PRIORITY_COLORS.suppressed)
+    : (SEVERITY_COLORS[incident.severity] ?? SEVERITY_COLORS.low);
+  const isResolved = incident.responderState === 'resolved';
+  const size = isResponder
+    ? incident.actionPriority === 'critical_dispatch'
+      ? 18
+      : incident.actionPriority === 'deploy_scout'
+        ? 15
+        : incident.actionPriority === 'monitor'
+          ? 13
+          : 11
+    : incident.severity === 'critical'
+      ? 18
+      : incident.severity === 'high'
+        ? 15
+        : 12;
 
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size + 8}" height="${size + 8}" viewBox="0 0 ${size + 8} ${size + 8}">
@@ -169,7 +192,7 @@ export function MapView({
       }
 
       // Marker
-      const icon = createIncidentIcon(incident.severity, incident.responderState);
+      const icon = createIncidentIcon(incident, isResponder);
       const marker = L.marker([incident.location.lat, incident.location.lng], { icon })
         .addTo(map)
         .bindTooltip(incident.title, { direction: 'top', offset: [0, -12] });

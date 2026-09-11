@@ -1,0 +1,452 @@
+[
+  {
+    "id": "rep_0001",
+    "source_user": "@mayurwatch",
+    "raw_text": "Water rising fast near Metro Pillar 42, Mayur Vihar Phase 1. Three people are stuck inside a ground-floor shop.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:05:12+05:30",
+    "gps_lat": 28.6084,
+    "gps_lon": 77.2951
+  },
+  {
+    "id": "rep_0002",
+    "source_user": "@neha_mv1",
+    "raw_text": "Serious flooding beside Pillar 42. Water is almost waist deep and entering the shops. Rescue help needed.",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:06:03+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0003",
+    "source_user": "@rajat_delhi",
+    "raw_text": "I am at Metro Pillar 42. Two elderly residents cannot cross the flooded lane and the current is getting stronger.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:07:18+05:30",
+    "gps_lat": 28.6081,
+    "gps_lon": 77.2954
+  },
+  {
+    "id": "rep_0004",
+    "source_user": "@ankit_onroad",
+    "raw_text": "Mayur Vihar Phase 1 metro side road is flooded badly. Autos have stopped and water is above the footpath.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:08:07+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0005",
+    "source_user": "@sunita_reports",
+    "raw_text": "Water has entered three shops near the Pillar 42 market lane. One shopkeeper says people are still trapped inside.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:09:11+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0006",
+    "source_user": "@aman_clicks",
+    "raw_text": "Flood current near Mayur Vihar metro station is pulling parked bikes. Police barricade required urgently.",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:10:26+05:30",
+    "gps_lat": 28.6086,
+    "gps_lon": 77.2949
+  },
+  {
+    "id": "rep_0007",
+    "source_user": "@pooja_mv",
+    "raw_text": "Pillar 42 wali gali mein chest-level water at the lowest point. Residents are shouting for ropes and life jackets.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:11:32+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0008",
+    "source_user": "@eastdelhivoice",
+    "raw_text": "Confirmed from the Mayur Vihar Phase 1 metro market: rapid waterlogging, power supply still on in a few flooded shops.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:12:15+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0009",
+    "source_user": "@sahil_sector4",
+    "raw_text": "The small bridge near Sector 4 has partially collapsed after floodwater hit the side wall. Do not use this route.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:12:48+05:30",
+    "gps_lat": 28.6091,
+    "gps_lon": 77.297
+  },
+  {
+    "id": "rep_0010",
+    "source_user": "@delhitrafficlive",
+    "raw_text": "Road access across the Sector 4 bridge is blocked. Debris and a damaged railing are covering one lane.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:13:21+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0011",
+    "source_user": "@imran_local",
+    "raw_text": "Standing near the Sector 4 crossing. A section of the bridge approach has given way and one scooter is stuck in debris.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:14:06+05:30",
+    "gps_lat": 28.6093,
+    "gps_lon": 77.2968
+  },
+  {
+    "id": "rep_0012",
+    "source_user": "@meera_updates",
+    "raw_text": "Sector 4 bridge route completely jammed. Concrete pieces have fallen near the eastern end; emergency vehicles cannot pass.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:15:17+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0013",
+    "source_user": "@cabdriver_vikas",
+    "raw_text": "Just turned back from the bridge near Sector 4. Looks unsafe and police are asking everyone to take the service road.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:16:24+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0014",
+    "source_user": "@nidhi_eastdelhi",
+    "raw_text": "Fresh crack visible on the Sector 4 bridge approach. Water is flowing under the broken edge and the road surface is sinking.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:17:02+05:30",
+    "gps_lat": 28.609,
+    "gps_lon": 77.2972
+  },
+  {
+    "id": "rep_0015",
+    "source_user": "@rwa_sector4",
+    "raw_text": "RWA volunteers have blocked entry to the Sector 4 bridge because part of the approach road has collapsed. Please use another route.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:18:14+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0016",
+    "source_user": "@metrocommuter",
+    "raw_text": "Near Mayur Vihar metro, floodwater has reached parked car doors. Saw residents moving upstairs with medicines and documents.",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:18:49+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0017",
+    "source_user": "@harshita_ground",
+    "raw_text": "Sector 4 bridge has collapsed on one side. I can see broken concrete and the approach lane is no longer passable.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:19:22+05:30",
+    "gps_lat": 28.6092,
+    "gps_lon": 77.2969
+  },
+  {
+    "id": "rep_0018",
+    "source_user": "@dev_sector4",
+    "raw_text": "The Sector 4 bridge is fine, it has NOT collapsed. The road is only waterlogged and traffic is being diverted as a precaution.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:19:51+05:30",
+    "gps_lat": 28.6094,
+    "gps_lon": 77.2971
+  },
+  {
+    "id": "rep_0019",
+    "source_user": "@cityalert_repost",
+    "raw_text": "RT @mayurwatch: Water rising fast near Metro Pillar 42, Mayur Vihar Phase 1. Three people are stuck inside a ground-floor shop.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:07:44+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0020",
+    "source_user": "@delhihelpdesk",
+    "raw_text": "Repost: Water rising fast near Metro Pillar 42 in Mayur Vihar Phase 1. Three people stuck inside a ground-floor shop.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:08:31+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0021",
+    "source_user": "@localnews_share",
+    "raw_text": "RT @mayurwatch: Water rising fast near Metro Pillar 42, Mayur Vihar Phase 1. Three people are stuck inside a ground-floor shop.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:09:39+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0022",
+    "source_user": "@helpinghands_del",
+    "raw_text": "Forwarded update: 3 people stuck in a ground-floor shop as water rises near Mayur Vihar Metro Pillar 42.",
+    "media_url": "media/flood_scene_1.jpg",
+    "timestamp": "2026-09-11T14:10:58+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0023",
+    "source_user": "@floodupdates24",
+    "raw_text": "RT @neha_mv1: Serious flooding beside Pillar 42. Water is almost waist deep and entering the shops. Rescue help needed.",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:11:46+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0024",
+    "source_user": "@eastdelhi_now",
+    "raw_text": "Serious flooding next to Pillar 42; waist-deep water is entering shops. Rescue assistance required. Via @neha_mv1",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:12:37+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0025",
+    "source_user": "@roadwatch_india",
+    "raw_text": "RT @sahil_sector4: The small bridge near Sector 4 has partially collapsed after floodwater hit the side wall. Do not use this route.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:14:42+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0026",
+    "source_user": "@trafficbuddy",
+    "raw_text": "Forwarded: Sector 4 bridge partially collapsed after floodwater damaged the side wall. Avoid the route. Source @sahil_sector4",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:15:53+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0027",
+    "source_user": "@breaking_del",
+    "raw_text": "RT @sahil_sector4: The small bridge near Sector 4 has partially collapsed after floodwater hit the side wall. Do not use this route.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:16:38+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0028",
+    "source_user": "@community_forward",
+    "raw_text": "Sector 4 small bridge has partly collapsed due to floodwater damaging its side wall. Route should be avoided. Shared from @sahil_sector4.",
+    "media_url": "media/bridge_incident.jpg",
+    "timestamp": "2026-09-11T14:18:02+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0029",
+    "source_user": "@priya_says",
+    "raw_text": "Thoughts and prayers for everyone affected 🙏",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:05:47+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0030",
+    "source_user": "@meme_banda",
+    "raw_text": "Delhi weather really said surprise test today 😂😂",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:06:36+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0031",
+    "source_user": "@chai_lover_ji",
+    "raw_text": "Perfect weather for chai and pakode yaar.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:07:53+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0032",
+    "source_user": "@football_amit",
+    "raw_text": "Anyone watching the match tonight? Team selection is terrible.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:09:02+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0033",
+    "source_user": "@random_rants",
+    "raw_text": "My food delivery is late again. Worst app service ever.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:10:04+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0034",
+    "source_user": "@simran_online",
+    "raw_text": "Stay safe everyone ❤️🙏",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:11:09+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0035",
+    "source_user": "@gadgetguru_ind",
+    "raw_text": "New phone battery is honestly disappointing. Barely lasts one day.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:12:59+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0036",
+    "source_user": "@daily_quotes_in",
+    "raw_text": "After every storm comes a rainbow. Keep believing.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:14:18+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0037",
+    "source_user": "@rohit_music",
+    "raw_text": "This new album is on repeat since morning 🔥",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:15:34+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0038",
+    "source_user": "@office_escape",
+    "raw_text": "Boss still expects everyone online during this weather lol.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:16:57+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0039",
+    "source_user": "@only_emojis",
+    "raw_text": "😢🙏🌧️🙏😢",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:18:33+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0040",
+    "source_user": "@metro_foodie",
+    "raw_text": "Does anyone know if the momo shop is open today?",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:20:08+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0041",
+    "source_user": "@kapilcomplains",
+    "raw_text": "Internet speed has been useless all afternoon. Please fix your network.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:21:13+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0042",
+    "source_user": "@moviebuff_riya",
+    "raw_text": "Finally watched that new thriller. Ending made zero sense.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:22:26+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0043",
+    "source_user": "@goodvibes_delhi",
+    "raw_text": "Sending positive energy to the city. We will get through this.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:23:19+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0044",
+    "source_user": "@shoppingdiary",
+    "raw_text": "Why are grocery prices increasing every week?",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:24:37+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0045",
+    "source_user": "@unknown_passenger",
+    "raw_text": "Water near the bridge is getting higher. Cars are turning back but I don't know the road name.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:20:46+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0046",
+    "source_user": "@schoolparent_07",
+    "raw_text": "Flooding by the school gate. Children cannot cross the road and no police are visible here.",
+    "media_url": "media/flood_scene_2.jpg",
+    "timestamp": "2026-09-11T14:22:04+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0047",
+    "source_user": "@localwalker",
+    "raw_text": "A lane near the metro station is under waist-deep water. Some people are waiting on a shop roof.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:23:48+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0048",
+    "source_user": "@help_needed_now",
+    "raw_text": "Two people are stuck near the market underpass. Sorry, unable to share exact location.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:25:16+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0049",
+    "source_user": "@auto_driver_ncr",
+    "raw_text": "Road blocked close to the flyover side. Looks like part of a wall has fallen into the water.",
+    "media_url": null,
+    "timestamp": "2026-09-11T14:27:03+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  },
+  {
+    "id": "rep_0050",
+    "source_user": "@urgent_hospital_news",
+    "raw_text": "Hospital generator submerged in floodwater, emergency power may fail soon. Please send technical and rescue support urgently.",
+    "media_url": "media/reused_flood_image.jpg",
+    "timestamp": "2026-09-11T14:29:08+05:30",
+    "gps_lat": null,
+    "gps_lon": null
+  }
+]

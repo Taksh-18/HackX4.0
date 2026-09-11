@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Radio,
@@ -11,6 +11,7 @@ import {
   Circle,
   User,
   ChevronDown,
+  X,
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useIncidents } from '../../context/IncidentContext';
@@ -25,12 +26,25 @@ const navItems = [
   { to: '/responder/settings', label: 'Settings', Icon: Settings },
 ];
 
-export function ResponderSidebar() {
+export function ResponderSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { setRole } = useRole();
   const { metrics } = useIncidents();
   const [profileOpen, setProfileOpen] = useState(false);
+
+  useEffect(() => {
+    onClose();
+  }, [pathname, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open, onClose]);
 
   const switchToCitizen = () => {
     setRole('citizen');
@@ -38,7 +52,22 @@ export function ResponderSidebar() {
   };
 
   return (
-    <aside className="flex flex-col w-56 xl:w-64 bg-slate-950 h-full flex-shrink-0">
+    <>
+      {open && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={onClose}
+          aria-label="Close responder navigation"
+        />
+      )}
+      <aside
+        id="responder-navigation"
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-slate-950 h-full flex-shrink-0 transition-transform md:static md:z-auto md:w-56 xl:w-64 md:translate-x-0',
+          open ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
       {/* Logo */}
       <div className="h-14 flex items-center gap-2.5 px-5 border-b border-slate-800">
         <div className="w-7 h-7 bg-red-600 rounded flex items-center justify-center flex-shrink-0">
@@ -48,6 +77,14 @@ export function ResponderSidebar() {
           <p className="text-sm font-bold text-white tracking-tight leading-none">CDIS</p>
           <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-0.5">Responder</p>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto p-1.5 text-slate-400 hover:text-white md:hidden"
+          aria-label="Close responder navigation"
+        >
+          <X size={18} aria-hidden />
+        </button>
       </div>
 
       {/* Critical alert indicator */}
@@ -135,6 +172,7 @@ export function ResponderSidebar() {
           )}
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

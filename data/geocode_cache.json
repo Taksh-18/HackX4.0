@@ -1,0 +1,26 @@
+{
+  "entries": {
+    "mayur vihar metro": {
+      "detail": "gazetteer:mayur vihar metro",
+      "lat": 28.6038,
+      "lng": 77.29,
+      "radius_m": 90.0,
+      "source": "offline_gazetteer"
+    },
+    "mayur vihar phase 1": {
+      "detail": "gazetteer:mayur vihar phase 1",
+      "lat": 28.6098555,
+      "lng": 77.2926318,
+      "radius_m": 500.0,
+      "source": "offline_gazetteer"
+    },
+    "near mayur vihar metro": {
+      "detail": "gazetteer:mayur vihar metro",
+      "lat": 28.6038,
+      "lng": 77.29,
+      "radius_m": 90.0,
+      "source": "offline_gazetteer"
+    }
+  },
+  "version": 2
+}

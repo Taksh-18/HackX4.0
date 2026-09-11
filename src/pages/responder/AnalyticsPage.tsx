@@ -3,10 +3,10 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
-import { mockApi } from '../../services/mockApi';
+import { api } from '../../services/api';
 import { LoadingState } from '../../components/ui/LoadingState';
 
-type Analytics = Awaited<ReturnType<typeof mockApi.getAnalytics>>;
+type Analytics = Awaited<ReturnType<typeof api.getAnalytics>>;
 
 const COLORS = {
   flood: '#3B82F6',
@@ -29,9 +29,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    mockApi.getAnalytics().then(setData);
+    api.getAnalytics()
+      .then(setData)
+      .catch(cause => setError(cause instanceof Error ? cause.message : 'Could not load analytics.'));
   }, []);
 
   if (!data) return (
@@ -40,7 +43,11 @@ export function AnalyticsPage() {
         <h1 className="text-base font-bold text-slate-900">Analytics</h1>
       </div>
       <div className="p-6">
-        <LoadingState />
+        {error ? (
+          <p className="text-sm text-red-700" role="alert">{error}</p>
+        ) : (
+          <LoadingState />
+        )}
       </div>
     </div>
   );
