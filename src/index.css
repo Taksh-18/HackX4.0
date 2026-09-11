@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Severity colors */
+  --color-critical: #DC2626;
+  --color-critical-light: #FEE2E2;
+  --color-critical-dark: #991B1B;
+  --color-high: #EA580C;
+  --color-high-light: #FFEDD5;
+  --color-moderate: #CA8A04;
+  --color-moderate-light: #FEF9C3;
+  --color-low: #16A34A;
+  --color-low-light: #DCFCE7;
+
+  /* Verification */
+  --color-corroborated: #16A34A;
+  --color-corroborated-light: #DCFCE7;
+  --color-developing: #CA8A04;
+  --color-developing-light: #FEF9C3;
+  --color-contradicted: #DC2626;
+  --color-contradicted-light: #FEE2E2;
+
+  /* Surfaces */
+  --color-surface-0: #FFFFFF;
+  --color-surface-1: #F8FAFC;
+  --color-surface-2: #F1F5F9;
+  --color-surface-3: #E2E8F0;
+
+  /* Text */
+  --color-ink: #0F172A;
+  --color-ink-secondary: #475569;
+  --color-ink-tertiary: #94A3B8;
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.15s ease-out;
+  --animate-slide-in-right: slideInRight 0.2s ease-out;
+  --animate-slide-in-up: slideInUp 0.2s ease-out;
+  --animate-pulse-soft: pulseSoft 2s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  0% { opacity: 0; transform: translateX(16px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInUp {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #F8FAFC;
+  color: #0F172A;
+  margin: 0;
+  padding: 0;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Leaflet map overrides */
+.leaflet-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #e8eef4;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0.75rem !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
+  border: 1px solid #E2E8F0 !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+}
+
+.leaflet-popup-tip-container {
+  display: none !important;
+}
+
+/* Shadow utilities */
+.shadow-card {
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.07), 0 1px 2px -1px rgba(0,0,0,0.04);
+}
+
+.shadow-panel {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.shadow-drawer {
+  box-shadow: -4px 0 24px rgba(0,0,0,0.10);
+}
